@@ -25,10 +25,9 @@
     After reading this document users should know what to expect when interacting with system component's configuration, how to select a configuration for a component and, be able to create and load new configurations.
 
 
-.. Important::
+.. warning::
 
-    Not all functionality referenced in this document is in place nor has it been agreed upon as the proper implementation.
-    For the time being, this document should be considered a proposed implementation.
+    The procedures in this documents are still under development. The functionality referenced here is not in place nor has it been agreed upon as the proper implementation. **For the time being, this document should be considered a proposed implementation.**
 
 .. _section-introduction:
 
@@ -37,180 +36,18 @@ Introduction
 
 The Vera Rubin Observatory control system is highly distributed, containing multiple components that must operate in consonant.
 In order to achieve reliable operation it is fundamental to guarantee that observers must be able to, at any point, identify what set of configurations a component is using, what sets are available to be loaded, and how to load the configuration they choose.
-During commissioning and engineering runs, users will also be interested in building, validating and verifying new sets of
-configurations.
+During commissioning and engineering runs, users will also be interested in building, validating and verifying new sets of configurations.
 
 The process of building new or modifying configurations will vary considerably for each component.
-In some cases, the configuration may be a simple set of host names and ports that the component connects to.
+In some cases, the configuration may be a simple set of host name and port that the component connects to.
 In other cases, the configuration may require the calculation of complex lookup tables (e.g. M1M3 and M2) or model coefficients (e.g. pointing component).
-These may require on-sky time for acquiring the data, and complex software to analyse and derive the configuration products.
+These may require on-sky time for acquiring the data, and complex software to analyze and derive the configuration products.
 All of this data needs to be associated with this configuration in a way that is easily accessible and traceable.
 
-In this tech-note we specify how components deal with these different aspects of configuration and the basics procedures required to build and update them. It also contains several examples on how users are to interact with configurations.
+In this tech-note we discuss the basic operational procedures involved in handling CSC configuration.
+From the simple action of bringing a CSC up with a specific configuration, to update and test them.
 
-CSC Configuration Repositories
-==============================
-
-The Rubin Control Software Architecture :cite:`LSE-150` supports two methods for performing configuration management: through a configuration database, or using a version control system.
-The only component to use a database is the camera CSCs (LSSTCam, ComCam, ATCamera), all others have adopted `git <https://git-scm.com>`__ to version control and manage configurations.
-
-Configurations must be stored in a separate repository from that of the component source code, to allow the configuration to evolve independently of the main code base.
-The location of a CSCs configuration repo is defined in the CSC's documentation, but can also be found in section :ref:`section-appendix-configuration-location`.
-The configuration files themselves are often yaml files, but not exclusively.
-The contents of the yaml files are defined by the schema which is found in the `schema` directory of each CSC (such as the `ATAOS schema <https://github.com/lsst-ts/ts_ataos/tree/develop/schema>`__).
-The schema definition contains default values, however, these are used primarily for testing and development and are *not* a valid configuration for operation.
-
-.. Important::
-
-    CSC configurations are (generally) grouped according to the overall system architecture.
-    For instance, the ``ATCS`` control package is used to sequence the motion of multiple components, including the ATDome, ATAOS, ATDomeTrajectory and ATHexapod.
-
-From the top-level configuration folder (e.g. `ts_config_attcs <https://github.com/lsst-ts/ts_config_attcs>`__), the configuration package for each component CSC is stored in the configuration repository in a directory with the same name as the CSC. For example, the ATAOS directory in `ts_config_attcs <https://github.com/lsst-ts/ts_config_attcs>`__ stores the configuration files for the `ATAOS <https://github.com/lsst-ts/ts_ataos>`__ CSC.
-
-The first level/subdirectory inside a CSC configuration package contains folders corresponding to versions of the configuration schema
-(e.g. `ATAOS/v1 <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS/v1>`__ and `ATAOS/v2 <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS/v2>`__). The configuration schema only evolves if the fields (not contents) in the configuration file needs to change.
-`Only configurations from the most recent version directory are to be used`, older versions are there for tracking purposes.
-The CSC defines the schema for its configuration, which lives with the CSC repository (examples to follow).
-The configuration files themselves depend upon the CSCs, but are often yaml files.
-The description of the configuration files live within the CSC documentation.
-
-Finally, each version directory there is a ``_labels`` file, `like this one for the ATAOS <https://github.com/lsst-ts/ts_config_attcs/blob/develop/ATAOS/v2/_labels.yaml>`__.
-This file maps a user-friendly label to each configuration file (e.g. `default`).
-This is discussed :ref:`further on <section-configurations-available>`.
-
-
-.. Verification of a new configuration, in this context, mainly involves the process of guaranteeing that the configuration has the correct schema; the input values have the correct types and respect any specified range.
-.. Validating that a configuration is good for operation is a much more involved procedure and may require on-sky time.
-
-
-.. _section-interface-definition:
-
-Configuration Interactions with CSCs
-====================================
-
-For aspects involving CSC configuration, all CSCs interact with the user in the same way.
-
-1. When a CSC transitions to the ``STANDBY`` State, the CSC presents the user with the available configurations.
-
-    - These are published as the ``configurationsAvailable`` event.
-
-
-2. When the user commands the CSC to transition from ``STANDBY`` to the ``DISABLED`` state, the user must specify which configuration they wish to load, or the default selection will be selected.
-
-    - This is accomplished using the ``start`` command, using the attribute ``configurationToApply``, as shown in the example in section :ref:`section-configuration-interation_non_default`.
-
-
-3. Upon transitioning to the ``DISABLED`` State, the CSC presents which configuration was loaded, and all necessary information to find the archived configuration in the future.
-
-    - This is published as the ``configurationApplied`` event
-
-The details of these interactions are discussed in the following sections.
-
-
-.. _section-configurations-available:
-
-configurationsAvailable
-^^^^^^^^^^^^^^^^^^^^^^^
-
-The ``configurationsAvailable`` event is a Generic event that is implemented by every CSC and is published upon entering the ``STANDBY`` state.
-It contains four parameters: ``labels``, ``mapping``, ``version`` and ``url``.
-The information from these parameters present users with the available set of configurations.
-
-- ``labels`` contains a comma separated list of labels, where each label maps to a configuration file.
-
-    - Labels are meant to simplify the loading of configurations. The name must clearly state the purpose of that configuration (e.g. default, nighttime, daytime) and not contain version numbers or dates.
-    - The same label is expected point to different configuration files over time (e.g. `default`), as configurations evolve.
-    - **The order of the labels is important**, as the first label in the list will be the one automatically selected by the high-level control system for any configurable CSC.
-
-- ``mapping`` contains a comma separated list of mappings between labels and files in the repo (e.g. "default: ATDome_tuned_20200511.yaml, low-speed: ATDome_tuned_20200124.yaml". The mappings are contained in the ``_label.yaml`` file in the version directory of each configuration repo.
-
-- ``url`` contains a URL indicating how the CSC retrieves its settings.  It will start with "file:" if it is a local clone of a git repo, or the standard URL, if a database.
-
-- ``version`` contains the version information about the local configuration repository or database and is primarily for traceability. Details are discussed :ref:`below <section-configuration-interaction-traceability>`.
-
-
-The configuration repository or database may contain any number of different configurations with different labels.
-However, *all configurations need to be associated with a label to be loaded by the CSC*.
-
-.. _section-configuration-applied:
-
-configurationApplied
-^^^^^^^^^^^^^^^^^^^^^
-
-The ``configurationApplied`` event is a Generic event that is published by all CSCs when transitioning to the ``DISABLED`` state.
-It currently contains the set of parameters in the ``configurationsAvailable`` event, except each parameter is only a single value, corresponding to what was loaded by the CSC.
-One additional optional parameter, ``otherInfo``, may be present, but only if required.
-
-The ``otherInfo`` parameter contains a comma-separated list of other specific CSC configuration events.
-This may be blank if no other specific CSC events are necessary.
-Since it is not possible to provide a generic way for CSCs to output detailed information about the configuration parameters they are loading, it is
-recommended to create additional events which are particular to each CSC to carry that information.
-
-Although it is not required, for clarity, we suggest that these events be preceded by ``configurationApplied`` followed by some description of the content, (e.g., ``configurationAppliedLUT`` or ``configurationAppliedController``).
-If ``otherInfo`` is not blank, then those event(s) must be published by the CSC alongside the ``configurationApplied`` event.
-The CSC is allowed to publish as many events as necessary to convey the information.
-
-Configuration Examples
-^^^^^^^^^^^^^^^^^^^^^^
-
-The simplest (and probably most common) case is for those where the CSC has only a single recommended setting.
-Other files or labels may be present, but they are generally unused.
-For example, for the ATDome CSC may have:
-
-::
-
-  configurationsAvailable event topic contains:
-    - labels: "default, original-install"
-    - mapping: "default: 20200511-configuration.yaml, original: 20180317-configuration.yaml"
-    - version: "v0.3.0-0-g6fbe3c7"
-    - url: "file:///home/saluser/repos/ts_config_attcs/ATDome/v1"
-
-.. Important::
-
-    The above is an example and not the current truth.
-
-If a user (or the ATCS) transitions the ATDome from the ``STANDBY`` to ``DISABLED`` state, the `default` configuration will be loaded resulting in the following information being published.
-
-::
-
-  configurationApplied event topic contains:
-    - label: "default"
-    - mapping: "default: 20200511-configuration.yaml"
-    - version: "v0.3.0-0-g6fbe3c7"
-    - url: "file:///home/saluser/repos/ts_config_attcs/ATDome/v1"
-
-
-In the case where CSCs may also have multiple settings that are regularly used, one of them being the preferred or default and another being secondary and so on.
-In this case, the purpose of those configurations should be spelled out explicitly.
-As an example, the ATAOS has a couple of available options for look-up tables. In this case, we may have something like:
-
-::
-
-  configurationsAvailable event topic contains:
-  labels: current,constant_hex,high_degree
-  mapping: "current: 20200511-configuration.yaml, constant_hex: 20200511-no-hex-configuration.yaml, high_degree: 20200511-configuration-high-degree fit.yaml"
-  version: v0.3.0-0-g6fbe3c7
-  url: file:///home/saluser/repos/ts_config_attcs/ATAOS/v2
-
-Note how the ``version`` from both CSCs have the same value, this is because both configurations reside in the same repository: ``ts_config_attcs``, and therefore will have the same commit hash.
-
-
-For a CSC that uses a configuration database, like the ATCamera, we may have
-something like:
-
-::
-
-  configurationApplied event topic contains:
-  labels: normal,highgain_fast,lowgain_fast,highgain_slow,lowgain_slow
-  version: 1.1,1.2,2.0,3.0
-  url:  sqlite:///home/camuser/config/config.db
-
-Another possibility is where the configuration is hosted in a sql database which enables remote connection. Is this case, the url would be different, and maybe contain something like:
-
-::
-
-  url: mysql://10.0.100.104:3306/CONFIG
-
+For more technical details about how CSCs handle configuration, see `tstn-017 <https://tstn-017.lsst.io>`__.
 
 .. _section-configuration-interation:
 
@@ -221,10 +58,34 @@ Users will interact with configurations in multiple ways.
 In many cases, a user/operator will only need to change the configuration that is currently loaded, and are not concerned with the contents of the configuration itself.
 This section illustrates example use-cases for these types of scenarios.
 
-Selecting a default CSC configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Discovering available configurations
+------------------------------------
 
-In most cases, the control packages contain high-level commands to enable all components under their control, and select the default configuration. An example of this is the ATCS.
+The easiest way to get information from a CSC programmatically is by using a Jupyter notebook server.
+From a notebook astronomers, developers and power users can easily interact with the system through Python.
+
+In order to know what configurations are available for a specific CSC, users can read the ``configurationsAvailable`` event.
+This is done using a ``salobj.Remote`` class.
+
+.. code-block:: python
+
+    from lsst.ts import salobj
+
+    domain = salobj.Domain()
+
+    atdome = salobj.Remote(domain, "ATDome")
+
+    await atdome.start_task()
+
+    config_available = await atdome.evt_configurationsAvailable.aget(timeout=5.)
+
+    # This will print the available labels.
+    print(config_available.labels)
+
+    # This will print the mapping between label and configuration files.
+    print(config_available.mapping)
+
+This can also be accomplished when using a high-level class to interact with a group of CSCs.
 
 .. code-block:: python
 
@@ -234,28 +95,100 @@ In most cases, the control packages contain high-level commands to enable all co
 
     await atcs.start_task
 
-    await atcs.prepare_for_onsky()
+    config_available = await atcs.rem.atdome.evt_configurationsAvailable.aget(timeout=5.)
 
-If working with an individual CSC, which as an operator would be a rare occurrence, default CSC configurations are loaded just be transitioning the CSC via:
+    # This will print the available labels.
+    print(config_available.labels)
+
+    # This will print the mapping between label and configuration files.
+    print(config_available.mapping)
+
+It is also possible to check this information by querying the EFD or through the CSC summary information interface on LOVE.
+
+.. TODO: Add example of how to get this information from the EFD and LOVE.
+
+Selecting default configuration
+-------------------------------
+
+In most cases, the control packages contain high-level commands to enable all components under their control, and select the default configuration in the process.
+An example of this is the ATCS.
+
+.. code-block:: python
+
+    from lsst.ts.observatory.control import ATCS
+
+    atcs = ATCS()
+
+    await atcs.start_task
+
+    await atcs.enable()
+
+It is also possible to perform this action using a ``Script`` in the ``scriptQueue``.
+There are different ways to launch scripts.
+From a Jupyter notebook, the user could launch a script by doing the following:
+
+.. code-block:: python
+
+    from lsst.ts.observatory.control import ScriptQueue
+
+    # index = 1 is the MT Queue and index = 2 the AT
+    queue = ScriptQueue(index=2)
+
+    await queue.start_task
+
+    script = await queue.add("auxtel/enable_atcs.py")
+
+    # Wait for script to execute
+    await script.done()
+
+Another alternative would be to launch the ``Script`` from the LOVE Queue interface.
+
+.. TODO: Add example on how to launch script from LOVE interface
+
+If working with an individual CSC, which as an operator would be a rare occurrence, default CSC configurations are loaded just by transitioning the CSC via:
 
 .. code-block:: python
 
     from lsst.ts import salobj
 
-    d = salobj.Domain()
-    atdome = salobj.Remote(d, "ATDome", index=1)
+    domain = salobj.Domain()
+
+    atdome = salobj.Remote(domain, "ATDome")
+
     await atdome.start_task()
 
+    # CSC needs to be in STANDBY state for this to work
     await salobj.set_summary_state(atdome, salobj.State.ENABLED)
 
+Similarly, this can be accomplished by using the ``ScriptQueue``, from Jupyter;
+
+.. code-block:: python
+
+    from lsst.ts.observatory.control import ScriptQueue
+
+    # index = 1 is the MT Queue and index = 2 the AT
+    queue = ScriptQueue(index=2)
+
+    await queue.start_task
+
+    script = await queue.add("set_summary_state", config={"data": [("ATDome", "ENABLED")]})
+
+    # Wait for script to execute
+    await script.done()
+
+Or the LOVE interface.
+
+.. TODO: Add example on how to launch script from LOVE interface
 
 
 .. _section-configuration-interation_non_default:
 
-Selecting a non-default CSC configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Selecting a non-default configuration
+-------------------------------------
 
-Selecting non-default configurations via control packages is also possible. A dictionary is used to send the appropriate configuration labels for each component that needs a non-default configuration. This example assumes the component of interest is already in the ``STANDBY`` state.
+Selecting non-default configurations via control packages is also possible.
+A dictionary is used to override the appropriate configuration labels for each component that needs a non-default configuration.
+This example assumes the component of interest is already in the ``STANDBY`` state.
 
 .. code-block:: python
 
@@ -265,111 +198,137 @@ Selecting non-default configurations via control packages is also possible. A di
 
     await atcs.start_task
 
-    await atcs.prepare_for_onsky(settings={ATAOS: 'constant_hex'})
+    # ATAOS must be in STANDBY state for this to work. All other CSCs will
+    # be configured with the default label
+    await atcs.enable(configuration={'ATAOS': 'constant_hex'})
 
-If working with an individual CSC, which as an operator would be a rare occurrence, default CSC configurations are loaded just be transitioning the CSC via:
+From a Jupyter notebook, users can also launch a script by doing the following:
+
+.. code-block:: python
+
+    from lsst.ts.observatory.control import ScriptQueue
+
+    # index = 1 is the MT Queue and index = 2 the AT
+    queue = ScriptQueue(index=2)
+
+    await queue.start_task
+
+    script = await queue.add("auxtel/enable_atcs.py", config={"ATAOS": "constant_hex"})
+
+    # Wait for script to execute
+    await script.done()
+
+And from the LOVE interface:
+
+.. TODO: Add example on how to launch script from LOVE interface
+
+If working with an individual CSC, which as an operator would be a rare occurrence, the ``salobj.Remotes`` class can be more appropriate:
 
 .. code-block:: python
 
     from lsst.ts import salobj
 
     d = salobj.Domain()
-    atdome = salobj.Remote(d, "ATDome", index=1)
+
+    atdome = salobj.Remote(d, "ATDome")
+
     await atdome.start_task()
 
-    await salobj.set_summary_state(atdome, salobj.State.ENABLED, configurationToApply='original-install')
+    await salobj.set_summary_state(
+    atdome, salobj.State.ENABLED, configurationToApply="original-install"
+    )
+
+And to launch a ``Script`` from Jupyter:
+
+.. code-block:: python
+
+    from lsst.ts.observatory.control import ScriptQueue
+
+    # index = 1 is the MT Queue and index = 2 the AT
+    queue = ScriptQueue(index=2)
+
+    await queue.start_task
+
+    script = await queue.add("set_summary_state", config={"data": [("ATDome", "ENABLED", "original-install")]})
+
+    # Wait for script to execute
+    await script.done()
+
+Or from the LOVE interface:
+
+.. TODO: Add example on how to launch script from LOVE interface
+
 
 .. _section-configuration-interation_changing_default:
 
 Changing the default configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------
 
-Changing the default configuration is a more involved endeavour because it entails making a change to the contents of the configuration repository. Because the repo is under version control, the appropriate steps must be taken.
+Changing the default configuration is a more involved endeavor because it entails making a change to the contents of the configuration repository.
+Because the repo is under version control, the appropriate steps must be taken.
 For this example let's assume we want to change the default in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repo <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
 
 
-1. Create a ticket in JIRA where the title/description note the change being made. Let's assume it creates ticket DM-12345.
+#.  Create a JIRA ticket in where the title/description note the change being made.
+    Let's assume it creates ticket DM-12345.
 
-2. Clone the repo and checkout a new branch
+#.  Clone the repo and checkout a new branch
 
-::
+    ::
 
-    git clone git@github.com:lsst-ts/ts_config_attcs.git
-    git checkout -b tickets/DM-12345
+      git clone git@github.com:lsst-ts/ts_config_attcs.git
+      git checkout -b tickets/DM-12345
 
-3. Open the most recent schema version (v2) and modify the contents of ``_labels.yaml``. For example, the original version may be:
+#.  Open the most recent schema version (v2) and modify the contents of ``_labels.yaml``.
+    For example, the original version may be:
 
-::
+    ::
 
-    # Labels for recommended settings; a dict of label: config_file
-    default: hex_m1_hex_202003.yaml
-    constant_hex: hex_m1_202003_constant_hex.yaml
+        # Labels for recommended settings; a dict of label: config_file
+        default: hex_m1_hex_202003.yaml
+        constant_hex: hex_m1_202003_constant_hex.yaml
 
-You wish to add a new configuration label called m1_hex, but then make the `constant_hex` be the default. Therefore, the file would become:
+    You wish to add a new configuration label called m1_hex, but then make the `constant_hex` be the default.
+    Therefore, the file would become:
 
-::
+    ::
 
-    # Labels for recommended settings; a dict of label: config_file
-    default: hex_m1_202003_constant_hex.yaml
-    hex_m1: hex_m1_hex_202003.yaml
+        # Labels for recommended settings; a dict of label: config_file
+        default: hex_m1_202003_constant_hex.yaml
+        hex_m1: hex_m1_hex_202003.yaml
 
-4. Add, Commit and push the changes, with a commit message.
+#.  Add, Commit and push the changes, with a commit message.
 
-::
+    ::
 
-    git commit -am "Updated default configuration for ATAOS"
-    git push
-
-
-5. If this is a normal configuration change procedure, then create a pull-request (PR), and have it reviewed, then merged. On-the-fly changes are discouraged but sometimes a reality and are therefore discussed in the section on :ref:`section-configuration-creating-a-new`.
-
-.. TODO: Fix/Edit/Verify the example below to checkout a local version of the repo, then set it up accordingly.
+      git commit -am "Updated default configuration for ATAOS"
+      git push
 
 
-6. Now we have to make that configuration available to the component, which will not automatically see your newly merged file.
-So, pull (or checkout the branch) with the updated repo from where the CSC on control package is reading from.
+#.  If this is a normal configuration change procedure, then create a pull-request (PR), and have it reviewed, merged and released.
 
-    - In the case of a deployed item such as the a CSC or the scriptQueue, see :ref:`updating-deployed-csc code`
-
-    - In the case of driving from a local nublado instance (e.g. from a notebook):
-
-        - Clone a local copy the repo needing an update (e.g. ``ts_config_latiss``). For this example lets assume it is cloned to ``/home/<YOUR-USER-ID>/develop/ts_config_latiss``
-        - do a ``git status`` from within ``ts_config_latiss`` to check which branch you're currently on.
-
-            - If required, fetch new branches and switch to your branch, then pull the branch as follows:
-
-                ::
-
-                    git status
-                    git fetch --all
-                    git checkout tickets/DM-12345
+    .. TODO: Fix/Edit/Verify the example below to checkout a local version of
+    .. the repo, then set it up accordingly.
 
 
-        - setup the new package for use, rather than using the default package but adding the following to the ``~/notebooks/.user_setups`` file, then save it. *Remember to replace the <YOUR-USER_ID> text.*
+#.  Once the new configuration is released it can be made available to the component, which will not automatically see the newly created configuration.
+    During normal operations this involves creating a new deployable artifact and updating the deployment to use the new configuration version.
 
-            .. code-block:: bash
+    On-the-fly changes are discouraged but sometimes a reality and are therefore discussed in :ref:`section-configuration-creating-a-new`.
 
-                setup -j -r /home/<YOUR-USER-ID>/develop/ts_config_latiss
+#.  Once the component is re-deployed with the new configuration, bring it back to ``ENABLED`` state.
+    No explicit specification of the configuration is necessary since the default is being selected.
+    If a different label is used, the ``configuration`` parameter must be set in the command below (see :ref:`section-configuration-interation_non_default`).
 
-        - Restart the kernel in the notebook and the newly cloned ``ts_config_latiss`` repo should now be accessed by default.
+    .. code-block:: python
 
-7. Bring the CSC to Standby State
-
-.. code-block:: python
-
-    await salobj.set_summary_state(ataos, salobj.State.STANDBY)
-
-8. Bring the CSC back to enabled state. No explicit specification of the configuration is necessary since the default is being selected. If a different label is used, the the ``configurationToApply`` parameter must be set in the command below.
-
-.. code-block:: python
-
-    await salobj.set_summary_state(ataos, salobj.State.ENABLED)
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED)
 
 
 .. _section-configuration-interaction-traceability:
 
 Finding a previously used configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------
 
 In the future, one may want to verify which configuration was being used for a given observation.
 Because we often use generic labels (e.g. `default`), and file contents can change with time, creating a robust version controlled system must go beyond simply changing filenames.
@@ -377,21 +336,23 @@ For this reason, additional metadata is associated with each configuration, nota
 These parameters are key to ensuring that each configuration is unique, and is traceable to their filename and contents.
 
 The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repo).
-The ``version`` parameter is more complicated. For all CSCs (except the camera?), the ``version`` parameter is a *branch description*\ [#git_version]_ is automatically generated and populated by the CSCs.
+The ``version`` parameter is more complicated.
+For all CSCs (except the camera?), the ``version`` parameter is a *branch description*\ [#git_version]_ is automatically generated and populated by the CSCs.
 This is what is output by running the following command in a configuration repo (e.g. ``ts_config_latiss``):
 
 .. prompt:: bash
 
     git describe --all --long --always --dirty --broken
 
-.. [#git_version] The option ``--broken`` was introduced in git 2.13.7 and may be removed if required
+.. [#git_version] The option ``--broken`` was introduced in git 2.13.7
 
 An example output is, ``heads/develop-0-gc89ef1a``.
-The repository branch (or tag) name forms the first part of the branch description.
+The repository branch (or tag) name forms the first part of the branch  description.
 It may take any form necessary to convey the appropriate information.
 They are individual identifiers and can change rapidly.
 The last 7 characters (``c89ef1a``) is the hash of the commit of the loaded configuration file.
-Users can find this commit by navigating to the repository on github, searching for the commit hash, then clicking on the "commits" section of the search results, as shown in :ref: `the screenshot below <fig-commit-tracing>`.
+Users can find this commit by navigating to the repository on github, searching for the commit hash, then
+clicking on the "commits" section of the search results, as shown in :ref:`the screenshot below <fig-commit-tracing>`.
 
 .. figure:: /_static/tracing_a_commit_on_github.jpg
     :name: fig-commit-tracing
@@ -417,101 +378,82 @@ Following is a detail of each step of the process to update the CSC configuratio
 For other components, see the exception section below.
 
 
-1.  Create a Jira ticket to track the work being done (e.g. DM-12345).
+#.  Create a Jira ticket to track the work being done (e.g. DM-12345).
     If details or discussions are needed they can done using the Jira tickets itself.
 
-::
+    ::
 
-    git clone git@github.com:lsst-ts/ts_config_attcs.git
-    git checkout -b tickets/DM-12345
+        git clone git@github.com:lsst-ts/ts_config_attcs.git
+        git checkout -b tickets/DM-12345
 
 
-2.  Execute the work needed to derive the new configuration parameter(s).
+#.  Execute the work needed to derive the new configuration parameter(s).
 
     As mentioned above, in some cases, the process may be straightforward, consisting simply of replacing the values of a set of parameters with given values (e.g., swapping filters).
-    In these cases, this step will be simply verifying any required work was performed and continuing to the next step. Jira should be used to track those activities.
+    In these cases, this step will be simply verifying any required work was performed and continuing to the next step.
+    Jira should be used to track those activities.
 
-    The Jira ticket should also be used to track the work done on those cases where a more involved analysis is required, e.g., in
-    dome and/or on sky data acquisition, EFD queries, data processing etc.
-    Any ancillary software or data product required during this process should be properly managed using git. When working with Telescope and
-    Site components, any software required during this process should be stored in a git repository in `T&S github organization <https://github.com/orgs/lsst-ts>`__, and should follow the standard `T&S development workflow guidelines <https://tssw-developer.lsst.io>`__.
+    The Jira ticket should also be used to track the work done on those cases where a more involved analysis is required, e.g., in dome and/or on sky data acquisition, EFD queries, data processing etc.
+    Any ancillary software or data product required during this process should be properly managed using git.
+    When working with Telescope and Site components, any software required during this process should be stored in a git repository in `T&S GitHub organization <https://github.com/orgs/lsst-ts>`__, and should follow the standard `T&S development workflow guidelines <https://tssw-developer.lsst.io>`__.
     This includes, but is not limited to, EFD queries, Jupyter notebooks, other data analysis routines (regardless of the programming language) and so on.
     The preferred location for storing Jupyter notebooks is the `ts_notebooks <https://github.com/lsst-ts/ts_notebooks>`__ repository.
 
-..    Details on how to deals with Camera and DM components will be given in the future.
+    ..    Details on how to deals with Camera and DM components will be given in the
+    ..    future.
 
     Any intermediate data product(s) generated in the process should also be stored in the `git Large File Storage <https://developer.lsst.io/git/git-lfs.html>`__  or, if size permits, with the software repository itself.
 
-3.  Edit/Add/Replace the configuration file(s) or add a new file(s) to host the new configuration in the CSC configuration directory.
+#.  Edit/Add/Replace the configuration file(s) or add a new file(s) to host the new configuration in the CSC configuration directory.
 
         - Ideally the name of the file should reflect the purpose of change, dates can also be used as well.
           Old configuration files can be kept in the repo if they still represent valid configurations otherwise, they should be removed.
           Note, though, that they will still remain available on previous versions in the git repo, enabling historical comparison.
 
-4. Add a (commented out) description in the file detailing where any auxiliary data may be stored, the jira ticket number used to create the file, and the reason for creating the configuration.
+#.  Add a (commented out) description in the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration.
 
-5.  Modify the configuration labels so that it maps to the new configuration (preferred) or create a new label for the new configuration.
+#.  Modify the configuration labels so that it maps to the new configuration (preferred) or create a new label for the new configuration.
 
         - For Salobj CSCs, this is done by editing the ``_labels.yaml`` file.
 
-6. Add, commit and push the changes, with a commit message.
+#.  Add, commit and push the changes, with a commit message.
 
-::
+    ::
 
-    git commit -am "Updated default configuration for ATAOS, adding file 20200512-configuration.yaml"
-    git push
+        git commit -am "Updated default configuration for ATAOS, adding file 20200512-configuration.yaml"
+        git push
 
-8.  Create pull request(s) (PRs), with evidence that the  configuration is tested, verified and documented.
+#.  Create pull request(s) (PRs), with evidence that the  configuration is tested, verified and documented.
 
-    - PRs must be created for all repositories that where modified during the process, including, but not limited to, the configuration repository, ancillary software and documentation.
-      The PRs will follow the standard review procedure. Once the they are approved, merged and released the new configuration becomes official and can be deployed.
+    PRs must be created for all repositories that where modified during the process, including, but not limited to, the configuration repository, ancillary software and documentation.
 
-9. Now we have to make that configuration available to the component, which will not automatically see your newly merged file.
-So, pull (or checkout the branch) with the updated repo from where the CSC on control package is reading from.
+    The PRs will follow the standard review procedure.
+    Once the they are approved, merged and released the new configuration becomes official and can be deployed.
 
-    - In the case of a deployed item such as a CSC or the scriptQueue, see :ref:`updating-deployed-csc code`
+#.  Now we have to make that configuration available to the component, which will not automatically see your newly merged file.
 
-    - In the case of driving from a local nublado instance (e.g. from a notebook):
+    - In the case of a deployed item such as a CSC or the scriptQueue, see :ref:`updating-deployed-csc`
 
-        - Clone a local copy the repo needing an update (e.g. ``ts_config_latiss``). For this example lets assume it is cloned to ``/home/<YOUR-USER-ID>/develop/ts_config_latiss``
-        - do a ``git status`` from within ``ts_config_latiss`` to check which branch you're currently on.
+#.  Bring the CSC to Standby State
 
-            - If required, fetch new branches and switch to your branch, then pull the branch as follows:
+    .. code-block:: python
 
-                ::
+        await salobj.set_summary_state(ataos, salobj.State.STANDBY)
 
-                    git status
-                    git fetch --all
-                    git checkout tickets/DM-12345
+#.  Bring the CSC back to enabled state.
+    No explicit specification of the configuration is necessary since the default is being selected, otherwise, the label must be passed using the ``configurationToApply`` parameter.
 
+    .. code-block:: python
 
-        - setup the new package for use, rather than using the default package but adding the following to the ``~/notebooks/.user_setups`` file, then save it
-
-            .. code-block:: bash
-
-                setup -j -r /home/<YOUR-USER-ID>/develop/ts_config_latiss
-
-        - Restart the kernel in the notebook and the newly cloned ``ts_config_latiss`` repo should now be accessed by default.
-
-
-8. Bring the CSC to Standby State
-
-.. code-block:: python
-
-    await salobj.set_summary_state(ataos, salobj.State.STANDBY)
-
-9. Bring the CSC back to enabled state. No explicit specification of the configuration is necessary since the default is being selected, otherwise, the label must be passed using the ``configurationToApply`` parameter.
-
-.. code-block:: python
-
-    await salobj.set_summary_state(ataos, salobj.State.ENABLED, configurationToApply='original-install')
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED, configurationToApply='original-install')
 
 
 On-the-fly changes
-^^^^^^^^^^^^^^^^^^
+------------------
 
 During commissioning we anticipate that there may be situations where quick configuration changes need to be implemented.
-In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the occurrence.
+In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the
+occurrence.
 Then, instead of checking out the repository locally, the user can work out of the deployed CSC configuration directly in the host.
 It is important to create a branch in place to work on and, later, commit-push to the repository and continue with the process afterwards.
 
@@ -520,8 +462,8 @@ It is important to create a branch in place to work on and, later, commit-push t
     Users must be aware that failing to commit-push changes done in line may result in loss of information and traceability.
     Therefore, this procedure should be reserved only for critical situations.
 
-
-Transient labels with Jira ticket numbers may be used for developing new configurations. They should be moved to standard type labels at the earliest opportunity.
+Transient labels with Jira ticket numbers may be used for developing new configurations.
+They should be moved to standard type labels at the earliest opportunity.
 
 Imagine now that during a test run, someone connects to the computer running the ATAOS CSC and edits the configuration directly.
 The ``version`` parameter would reflect that change with something like:
@@ -531,13 +473,12 @@ The ``version`` parameter would reflect that change with something like:
   version: v0.3.0-0-g6fbe3c7-dirty
 
 When this happen, it prevents us from precisely identifying what configuration was used.
-Alternatively, the user could create a branch on their work machine, make the required changes, commit, push it to github and pull/check out the new
-configuration in the CSC machine.
+Alternatively, the user could create a branch on their work machine, make the required changes, commit, push it to github and pull/check out the new configuration in the CSC machine.
 By doing it this way, traceability is not lost, at the expense of a couple extra minutes.
 
 
 Exceptions
-^^^^^^^^^^
+----------
 
 The following require different procedures to create/modify a configuration
 
@@ -551,13 +492,14 @@ The following require different procedures to create/modify a configuration
 Appendix I: Configuration location for CSCs
 ===========================================
 
-.. note:: This appendix will contain a table relating the CSC to the configuration location
+.. note:: This appendix will contain a table relating the CSC to the
+.. configuration location
 
 
-.. _updating-deployed-csc code:
+.. _updating-deployed-csc:
 
-Appendix II: Updating Deployed CSCs or Control Packages
-=======================================================
+Appendix II: Updating Deployed CSCs
+===================================
 
 .. TODO: Example where you change code inside a container (scriptQueue)
 
@@ -568,10 +510,16 @@ Appendix II: Updating Deployed CSCs or Control Packages
 
     Needs completing. Might be better to have this as a separate document.
 
+.. _updating-control-packages:
+
+Appendix III: Updating Control Packages
+=======================================
+
+TBD
 
 .. _section-appendix-configuration-non-salObj:
 
-Appendix III: Creating Configurations for non-salObj CSCs
+Appendix IV: Creating Configurations for non-salObj CSCs
 =========================================================
 
 This appendix details the require procedures to produce configuration files for specific CSCs.
@@ -579,13 +527,10 @@ This appendix details the require procedures to produce configuration files for 
 .. _section-pointing-component:
 
 Pointing Component
-^^^^^^^^^^^^^^^^^^
+------------------
 
-The pointing component has a configuration file that resides with the code
-base which, in itself, also defines a couple different files (e.g. pointing
-model). Nevertheless, the CSC is not developed to be a configurable CSC,
-meaning it does not accept a ``configurationToApply`` value to switch between
-different configurations and does not output the required events.
+The pointing component has a configuration file that resides with the code base which, in itself, also defines a couple different files (e.g. pointing model).
+Nevertheless, the CSC is not developed to be a configurable CSC, meaning it does not accept a ``configurationToApply`` value to switch between different configurations and does not output the required events.
 
 The CSC is being developed by Observatory Sciences using C++.
 
@@ -596,7 +541,7 @@ The CSC is being developed by Observatory Sciences using C++.
 .. _section-m2:
 
 M2
-^^
+--
 
 .. Important::
 
@@ -605,8 +550,7 @@ M2
 .. _section-atmcs-atpneumatics:
 
 ATMCS and ATPneumatics
-^^^^^^^^^^^^^^^^^^^^^^
-
+----------------------
 
 .. Important::
 
@@ -617,13 +561,11 @@ ATMCS and ATPneumatics
 Non-Configurable CSCs
 ---------------------
 
-Some CSCs will not be configurable at all. Examples are sparse in our current
-architecture but, the from Salobj point of view, a CSC can be developed on top
-of a ``BaseCSC`` which makes it a non-configurable component.
+Some CSCs will not be configurable at all.
+Examples are sparse in our current architecture but, the from Salobj point of view, a CSC can be developed on top of a ``BaseCSC`` which makes it a non-configurable component.
 
-A non-configurable CSC will ignore the ``configurationToApply`` attribute of the
-``start`` command, as it does not contain any true meaning to it. Likewise
-these CSCs will not output any of the configuration-related events.
+A non-configurable CSC will ignore the ``configurationToApply`` attribute of the ``start`` command, as it does not contain any true meaning to it.
+Likewise these CSCs will not output any of the configuration-related events.
 
 .. Important::
 
