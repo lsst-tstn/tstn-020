@@ -123,11 +123,11 @@ An example of this is the ATCS.
 
     await atcs.enable()
 
-It is also possible to perform this action using a ``Script`` in the ``scriptQueue``.
-There are different ways to launch scripts.
-From a Jupyter notebook, the user could launch a script by doing the following:
+.. It is also possible to perform this action using a ``Script`` in the ``scriptQueue``.
+.. There are different ways to launch scripts.
+.. From a Jupyter notebook, the user could launch a script by doing the following:
 
-.. code-block:: python
+.. .. code-block:: python
 
     from lsst.ts.observatory.control import ScriptQueue
 
@@ -141,7 +141,7 @@ From a Jupyter notebook, the user could launch a script by doing the following:
     # Wait for script to execute
     await script.done()
 
-Another alternative would be to launch the ``Script`` from the LOVE Queue interface.
+.. Another alternative would be to launch the ``Script`` from the LOVE Queue interface.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
@@ -160,9 +160,9 @@ If working with an individual CSC, which as an operator would be a rare occurren
     # CSC needs to be in STANDBY state for this to work
     await salobj.set_summary_state(atdome, salobj.State.ENABLED)
 
-Similarly, this can be accomplished by using the ``ScriptQueue``, from Jupyter;
+.. Similarly, this can be accomplished by using the ``ScriptQueue``, from Jupyter;
 
-.. code-block:: python
+.. .. code-block:: python
 
     from lsst.ts.observatory.control import ScriptQueue
 
@@ -176,7 +176,7 @@ Similarly, this can be accomplished by using the ``ScriptQueue``, from Jupyter;
     # Wait for script to execute
     await script.done()
 
-Or the LOVE interface.
+.. Or the LOVE interface.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
@@ -202,9 +202,9 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
     # be configured with the default label
     await atcs.enable(configuration={'ATAOS': 'constant_hex'})
 
-From a Jupyter notebook, users can also launch a script by doing the following:
+.. From a Jupyter notebook, users can also launch a script by doing the following:
 
-.. code-block:: python
+.. .. code-block:: python
 
     from lsst.ts.observatory.control import ScriptQueue
 
@@ -218,7 +218,7 @@ From a Jupyter notebook, users can also launch a script by doing the following:
     # Wait for script to execute
     await script.done()
 
-And from the LOVE interface:
+.. And from the LOVE interface:
 
 .. TODO: Add example on how to launch script from LOVE interface
 
@@ -238,9 +238,9 @@ If working with an individual CSC, which as an operator would be a rare occurren
     atdome, salobj.State.ENABLED, configurationToApply="original-install"
     )
 
-And to launch a ``Script`` from Jupyter:
+.. And to launch a ``Script`` from Jupyter:
 
-.. code-block:: python
+.. .. code-block:: python
 
     from lsst.ts.observatory.control import ScriptQueue
 
@@ -254,7 +254,7 @@ And to launch a ``Script`` from Jupyter:
     # Wait for script to execute
     await script.done()
 
-Or from the LOVE interface:
+.. Or from the LOVE interface:
 
 .. TODO: Add example on how to launch script from LOVE interface
 
@@ -279,6 +279,8 @@ For this example let's assume we want to change the default in the ATAOS, which 
       git clone git@github.com:lsst-ts/ts_config_attcs.git
       git checkout -b tickets/DM-12345
 
+    Note that the branch name is the word ``tickets/`` appended with the Jira ticket name.
+
 #.  Open the most recent schema version (v2) and modify the contents of ``_labels.yaml``.
     For example, the original version may be:
 
@@ -297,13 +299,15 @@ For this example let's assume we want to change the default in the ATAOS, which 
         default: hex_m1_202003_constant_hex.yaml
         hex_m1: hex_m1_hex_202003.yaml
 
-#.  Add, Commit and push the changes, with a commit message.
+#.  Add, commit and push the changes, with a commit message.
 
     ::
 
-      git commit -am "Updated default configuration for ATAOS"
+      git commit -am "Updated default configuration label for ATAOS to use hex_m1_202003_constant_hex.yaml instead of hex_m1_hex_202003.yaml. See DM-12345 for more information."
       git push
 
+    The commit message can add information about what changes are being made and a short description for the reason.
+    It is also recommended to explicitly mention the Jira ticket for the work being done as the branch name is lost once the changes are merged to the head branch.
 
 #.  If this is a normal configuration change procedure, then create a pull-request (PR), and have it reviewed, merged and released.
 
@@ -337,7 +341,7 @@ These parameters are key to ensuring that each configuration is unique, and is t
 
 The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repo).
 The ``version`` parameter is more complicated.
-For all CSCs (except the camera?), the ``version`` parameter is a *branch description*\ [#git_version]_ is automatically generated and populated by the CSCs.
+For all CSCs (except the camera?), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
 This is what is output by running the following command in a configuration repo (e.g. ``ts_config_latiss``):
 
 .. prompt:: bash
@@ -374,14 +378,14 @@ The process to derive new configuration parameters will vary considerably from c
 In some cases, the configuration is simple enough that a change may involve simply replacing an IP or hostname value, a routine filter swap on an instrument or updating the limits to an axis range due to some evolving condition.
 On the other hand, deriving new parameters may involve generating complex LUTs that may require on sky observations and detailed data analysis.
 
-Following is a detail of each step of the process to update the CSC configuration for CSCs written in salobj.
+Following is a detail of each step of the process to generate a new configuration and update it for CSCs written in salobj.
 For other components, see the exception section below.
 
 
 #.  Create a Jira ticket to track the work being done (e.g. DM-12345).
     If details or discussions are needed they can done using the Jira tickets itself.
 
-    ::
+    .. prompt:: bash
 
         git clone git@github.com:lsst-ts/ts_config_attcs.git
         git checkout -b tickets/DM-12345
@@ -418,10 +422,14 @@ For other components, see the exception section below.
 
 #.  Add, commit and push the changes, with a commit message.
 
-    ::
+    .. prompt:: bash
 
-        git commit -am "Updated default configuration for ATAOS, adding file 20200512-configuration.yaml"
+        git commit -am "Add new LUTs for ATAOS (file 20200512-configuration.yaml) based on data taken on 20200512. Updated default configuration for ATAOS to use the new file. Check DM-12345 for more information."
         git push
+
+#.  Test the new configuration on the CSC.
+    If this require in-dome or on-sky testing, make sure the test is properly documented in a technote and/or Jira ticket.
+    To make the configuration available on a running CSC check :ref:`section-on-the-fly-config`.
 
 #.  Create pull request(s) (PRs), with evidence that the  configuration is tested, verified and documented.
 
@@ -430,31 +438,84 @@ For other components, see the exception section below.
     The PRs will follow the standard review procedure.
     Once the they are approved, merged and released the new configuration becomes official and can be deployed.
 
-#.  Now we have to make that configuration available to the component, which will not automatically see your newly merged file.
+.. _section-on-the-fly-config:
 
-    - In the case of a deployed item such as a CSC or the scriptQueue, see :ref:`updating-deployed-csc`
+On-the-fly changes
+------------------
 
-#.  Bring the CSC to Standby State
+During the process of creating a new configuration (:ref:`section-configuration-creating-a-new`) or during a commissioning/engineering run, it may be necessary to make a new configuration available to a running CSC for testing.
+In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the occurrence.
+
+Following are the steps to make a new configuration available to a running CSC:
+
+#.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 5 in :ref:`section-configuration-creating-a-new`.
+#.  Make sure the CSC in in ``STANDBY`` state.
 
     .. code-block:: python
 
         await salobj.set_summary_state(ataos, salobj.State.STANDBY)
 
-#.  Bring the CSC back to enabled state.
-    No explicit specification of the configuration is necessary since the default is being selected, otherwise, the label must be passed using the ``configurationToApply`` parameter.
+#.  Login to the where the CSC is running.
+    The procedure will vary depending on how the CSC is deployed.
+    For containerized components, you can find details on how to do that in the `deployment documentation <https://tstn-019.lsst.io>`_.
+#.  Once inside the CSC host, go to the location where the configuration is installed.
+    This information can be found in the CSC documentation or in the `deployment documentation`_.
+#.  Once in the configuration package, update the git repository and checkout the branch with the new configuration:
+
+    .. prompt:: bash
+
+      git fetch --all
+      git checkout -b tickets/DM-12345
+#.  Once the branch is updated you can re-enable the component to load the new configuration.
 
     .. code-block:: python
 
-        await salobj.set_summary_state(ataos, salobj.State.ENABLED, configurationToApply='original-install')
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED)
 
+The ``version`` attribute in the ``configurationsAvailable`` event would reflect that change with something like:
 
-On-the-fly changes
-------------------
+::
 
-During commissioning we anticipate that there may be situations where quick configuration changes need to be implemented.
-In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the
-occurrence.
+  version: heads/tickets/DM-12345-0-g79e2257
+
+Note that it would be possible to track the configuration in the future, even if the branch is removed from the repository, by using the commit hash (``g79e2257``).
+
+.. _section-in-line-config:
+
+In-line changes
+---------------
+
+During commissioning we anticipate that there may be situations where quick configuration changes need to be implemented and tested.
+In these cases, working out of a local branch and going over the :ref:`section-on-the-fly-config` process may take some precious on-sky time.
+To make sure the work is tracked it is still recommended that the user create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 Then, instead of checking out the repository locally, the user can work out of the deployed CSC configuration directly in the host.
+
+To do that the user should perform the following procedure:
+
+#.  Make sure the CSC in in ``STANDBY`` state.
+
+    .. code-block:: python
+
+        await salobj.set_summary_state(ataos, salobj.State.STANDBY)
+
+#.  Login to the where the CSC is running.
+    The procedure will vary depending on how the CSC is deployed.
+    For containerized components, you can find details on how to do that in the `deployment documentation <https://tstn-019.lsst.io>`_.
+#.  Once inside the CSC host, go to the location where the configuration is installed.
+    This information can be found in the CSC documentation or in the `deployment documentation`_.
+#.  Create a local branch to work on.
+
+    .. prompt:: bash
+
+      git checkout tickets/DM-12345
+
+#.  Use the available text editors (``vim`` and ``emacs`` are usually made available) to edit the configurations.
+#.  Once the configurations are edited and saved, re-enable the component.
+
+    .. code-block:: python
+
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED)
+
 It is important to create a branch in place to work on and, later, commit-push to the repository and continue with the process afterwards.
 
 .. warning::
@@ -465,17 +526,15 @@ It is important to create a branch in place to work on and, later, commit-push t
 Transient labels with Jira ticket numbers may be used for developing new configurations.
 They should be moved to standard type labels at the earliest opportunity.
 
-Imagine now that during a test run, someone connects to the computer running the ATAOS CSC and edits the configuration directly.
-The ``version`` parameter would reflect that change with something like:
+Note that when you connect to the computer running a CSC and edits the configuration directly, the ``version`` parameter reflect that change with something like:
 
 ::
 
-  version: v0.3.0-0-g6fbe3c7-dirty
+  version: heads/tickets/DM-12345-0-g79e2257-dirty
 
 When this happen, it prevents us from precisely identifying what configuration was used.
-Alternatively, the user could create a branch on their work machine, make the required changes, commit, push it to github and pull/check out the new configuration in the CSC machine.
+The preferred solution, in this case is to use :ref:`section-on-the-fly-config`.
 By doing it this way, traceability is not lost, at the expense of a couple extra minutes.
-
 
 Exceptions
 ----------
