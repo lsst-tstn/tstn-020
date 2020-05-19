@@ -460,15 +460,86 @@ Following are the steps to make a new configuration available to a running CSC:
 
 #.  Login to the where the CSC is running.
     The procedure will vary depending on how the CSC is deployed.
-    For containerized components, you can find details on how to do that in the `deployment documentation <https://tstn-019.lsst.io>`_.
+    Most Telescope and Site components are deployed on containers using Kubernetes (k8s).
+    For details about the deployment system see the `deployment documentation <https://tstn-019.lsst.io>`_.
+    For those containerized components, the procedure is as follows:
+
+    #.  Log in to the rancher service at https://rancher.ls.lsst.org.
+        You will need special authorization to acquire an account on that service.
+
+        .. warning::
+
+            This service is responsible for managing the deployment of the entire system.
+            Make sure you follow the procedure exactly.
+            If you are in doubt about an operation make sure you verify it with knowledgeable personnel.
+
+    #.  Once logged in, you will be presented with the :ref:`list of available k8s clusters <fig-rancher-page-1>`.
+
+        .. figure:: /_static/rancher-page-1.png
+          :name: fig-rancher-page-1
+          :target: ../_images/rancher-page-1.png
+          :alt: clusters
+
+          List of Kubernetes clusters.
+          At the time of this writing, the only cluster available was kueyen, the commissioning cluster at the base facility in Chile.
+
+        Click on the name of the cluster where the CSC you want to modify is running.
+        If it is a summit operation, the name of the cluster will be ``andes``.
+        After selecting the cluster, you will be redirected to the :ref:`cluster dashboard <fig-cluster-dashboard>`.
+
+        .. figure:: /_static/cluster-dashboard.png
+           :name: fig-cluster-dashboard
+           :target: ../_images/cluster-dashboard.png
+           :alt: cluster dashboard
+
+           Cluster dashboard.
+
+    #.  On the top right corner of the :ref:`cluster dashboard <fig-cluster-dashboard>`, there is a button with ``Launch kubectl``.
+        This will open an interactive session on you browser that will allow you to interact with the k8s cluster you selected.
+        If you are knowledgeable about k8s you can also download the ``Kubeconfig file`` and login to the cluster from your own computer.
+
+        .. warning::
+
+            **Do not** download the ``Kubeconfig file`` unless you really know what you are doing.
+            This file contains access and credential information that would allow users direct access to the k8s cluster.
+    #.  Once you select ``Launch kubectl`` you will be redirected to a :ref:`Shell <fig-k8s-shell>` connected directly to the selected k8s cluster.
+
+        .. figure:: /_static/k8s-shell.png
+          :name: fig-k8s-shell
+          :target: ../_images/k8s-shell.png
+          :alt: kubectl shell
+
+          Kubectl shell.
+
+    #.  Use the following command to discover the container running the CSC :
+
+        .. prompt:: bash
+
+          kubectl get pods -n cscs
+
+        This will list all the CSCs "pods" which are, basically, the running containers.
+        The name of the CSC will be part of the pod name and should be easy to identify.
+
+    #.  Connect to the running pod:
+
+        .. prompt:: bash
+
+          kubectl exec -it -n cscs <pod-name> -- /bin/bash
+
+        Make sure to replace ``<pod-name>`` with the name of the pod for that CSC.
+
+    For CSCs that are not running on a container, you should be able to login to the host machine with ``ssh`` and continue with the procedure.
+
 #.  Once inside the CSC host, go to the location where the configuration is installed.
     This information can be found in the CSC documentation or in the `deployment documentation`_.
+    You should be able to use regular linux command line commands (e.g. ``ls`` and ``cd``).
 #.  Once in the configuration package, update the git repository and checkout the branch with the new configuration:
 
     .. prompt:: bash
 
       git fetch --all
       git checkout -b tickets/DM-12345
+
 #.  Once the branch is updated you can re-enable the component to load the new configuration.
 
     .. code-block:: python
