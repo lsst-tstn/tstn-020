@@ -45,7 +45,7 @@ These may require on-sky time for acquiring the data, and complex software to an
 All of this data needs to be associated with this configuration in a way that is easily accessible and traceable.
 
 In this tech-note we discuss the basic operational procedures involved in handling CSC configuration.
-From the simple action of bringing a CSC up with a specific configuration, to update and test them.
+The document begins with the most simple case of bringing a CSC up with a specific configuration, and eventually details how to updating and testing newly defined configurations.
 
 For more technical details about how CSCs handle configuration, see `tstn-017 <https://tstn-017.lsst.io>`__.
 
@@ -55,16 +55,16 @@ Configuration Interaction Use-Cases
 ===================================
 
 Users will interact with configurations in multiple ways.
-In many cases, a user/operator will only need to change the configuration that is currently loaded, and are not concerned with the contents of the configuration itself.
+In many cases, a user/operator will only need to change the configuration that is currently loaded and are not concerned with the contents of the configuration itself.
 This section illustrates example use-cases for these types of scenarios.
 
 Discovering available configurations
 ------------------------------------
 
 The easiest way to get information from a CSC programmatically is by using a Jupyter notebook server.
-From a notebook astronomers, developers and power users can easily interact with the system through Python.
+From a notebook, observers, developers and power users can easily interact with the system through Python.
 
-In order to know what configurations are available for a specific CSC, users can read the ``configurationsAvailable`` event.
+In order to know which configurations are available for a specific CSC, users can read the ``configurationsAvailable`` event.
 This is done using a ``salobj.Remote`` class.
 
 .. code-block:: python
@@ -85,7 +85,7 @@ This is done using a ``salobj.Remote`` class.
     # This will print the mapping between label and configuration files.
     print(config_available.mapping)
 
-This can also be accomplished when using a high-level class to interact with a group of CSCs.
+Often, this can also be accomplished using a high-level class that is designed to interact with a group of CSCs.
 
 .. code-block:: python
 
@@ -103,7 +103,7 @@ This can also be accomplished when using a high-level class to interact with a g
     # This will print the mapping between label and configuration files.
     print(config_available.mapping)
 
-It is also possible to check this information by querying the EFD or through the CSC summary information interface on LOVE.
+It is also possible to check this information by querying the EFD or through the CSC summary information interface on LOVE. Examples of how to do this using the LOVE interface will be added when the functionality is ready.
 
 .. TODO: Add example of how to get this information from the EFD and LOVE.
 
@@ -145,7 +145,7 @@ An example of this is the ATCS.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
-If working with an individual CSC, which as an operator would be a rare occurrence, default CSC configurations are loaded just by transitioning the CSC via:
+If working with an individual CSC, which as an operator would be a rare occurrence, default CSC configurations are loaded simply by transitioning the CSC via:
 
 .. code-block:: python
 
@@ -220,9 +220,11 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
 
 .. And from the LOVE interface:
 
+Examples of how to do this using the LOVE interface will be added when the functionality is ready.
+
 .. TODO: Add example on how to launch script from LOVE interface
 
-If working with an individual CSC, which as an operator would be a rare occurrence, the ``salobj.Remotes`` class can be more appropriate:
+If working with an individual CSC, which as an operator would be a rare occurrence, the ``salobj.Remotes`` class may be more appropriate:
 
 .. code-block:: python
 
@@ -266,7 +268,7 @@ Changing the default configuration
 
 Changing the default configuration is a more involved endeavor because it entails making a change to the contents of the configuration repository.
 Because the repo is under version control, the appropriate steps must be taken.
-For this example let's assume we want to change the default in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repo <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
+For this example, let's assume we want to change the default in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repo <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
 
 
 #.  Create a JIRA ticket in where the title/description note the change being made.
@@ -290,7 +292,7 @@ For this example let's assume we want to change the default in the ATAOS, which 
         default: hex_m1_hex_202003.yaml
         constant_hex: hex_m1_202003_constant_hex.yaml
 
-    You wish to add a new configuration label called m1_hex, but then make the `constant_hex` be the default.
+    Say you wish to add a new configuration label called, `m1_hex`, and then make the `constant_hex` be the default.
     Therefore, the file would become:
 
     ::
@@ -339,10 +341,10 @@ Because we often use generic labels (e.g. `default`), and file contents can chan
 For this reason, additional metadata is associated with each configuration, notably the ``url`` and ``version`` parameters in both the ``configurationsAvailable`` and ``configurationApplied`` events.
 These parameters are key to ensuring that each configuration is unique, and is traceable to their filename and contents.
 
-The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repo).
+The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repository).
 The ``version`` parameter is more complicated.
 For all CSCs (except the camera?), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
-This is what is output by running the following command in a configuration repo (e.g. ``ts_config_latiss``):
+This is what is output by running the following command in a configuration repository (e.g. ``ts_config_latiss``):
 
 .. prompt:: bash
 
@@ -351,9 +353,9 @@ This is what is output by running the following command in a configuration repo 
 .. [#git_version] The option ``--broken`` was introduced in git 2.13.7
 
 An example output is, ``heads/develop-0-gc89ef1a``.
-The repository branch (or tag) name forms the first part of the branch  description.
+The repository branch (or tag) name forms the first part of the branch description.
+This first part contain individual identifiers and can change rapidly.
 It may take any form necessary to convey the appropriate information.
-They are individual identifiers and can change rapidly.
 The last 7 characters (``c89ef1a``) is the hash of the commit of the loaded configuration file.
 Users can find this commit by navigating to the repository on github, searching for the commit hash, then
 clicking on the "commits" section of the search results, as shown in :ref:`the screenshot below <fig-commit-tracing>`.
@@ -366,8 +368,9 @@ clicking on the "commits" section of the search results, as shown in :ref:`the s
 
 Exceptions
 ----------
-Exception to the above go here.
+TBR.
 
+.. TODO: Complete this section
 
 .. _section-configuration-creating-a-new:
 
@@ -428,7 +431,7 @@ For other components, see the exception section below.
         git push
 
 #.  Test the new configuration on the CSC.
-    If this require in-dome or on-sky testing, make sure the test is properly documented in a technote and/or Jira ticket.
+    If this requires in-dome or on-sky testing, make sure the test is properly documented in a technote and/or Jira ticket.
     To make the configuration available on a running CSC check :ref:`section-on-the-fly-config`.
 
 #.  Create pull request(s) (PRs), with evidence that the  configuration is tested, verified and documented.
@@ -443,13 +446,13 @@ For other components, see the exception section below.
 On-the-fly changes
 ------------------
 
-During the process of creating a new configuration (:ref:`section-configuration-creating-a-new`) or during a commissioning/engineering run, it may be necessary to make a new configuration available to a running CSC for testing.
+During the process of creating a new configuration (:ref:`section-configuration-creating-a-new`) or during a commissioning/engineering run, it may be necessary to make a new configuration available to a running CSC for testing without rebuilding/re-deploying the component.
 In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 
 Following are the steps to make a new configuration available to a running CSC:
 
 #.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 5 in :ref:`section-configuration-creating-a-new`.
-#.  Make sure the CSC in in ``STANDBY`` state.
+#.  Make sure the CSC in in ``STANDBY`` state, which can be accomplished using the following command.
 
     .. code-block:: python
 
@@ -485,14 +488,14 @@ Note that it would be possible to track the configuration in the future, even if
 In-line changes
 ---------------
 
-During commissioning we anticipate that there may be situations where quick configuration changes need to be implemented and tested.
-In these cases, working out of a local branch and going over the :ref:`section-on-the-fly-config` process may take some precious on-sky time.
-To make sure the work is tracked it is still recommended that the user create a Jira ticket (or work out of an existing ticket) to document the occurrence.
+During commissioning, we anticipate that there will be situations where quick configuration changes need to be implemented and tested.
+In these cases, working out of a local branch and going over the :ref:`section-on-the-fly-config` process may result in the loss of on-sky time.
+To ensure the work/changes is tracked it is still recommended that the user create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 Then, instead of checking out the repository locally, the user can work out of the deployed CSC configuration directly in the host.
 
-To do that the user should perform the following procedure:
+To do this, perform the following procedure:
 
-#.  Make sure the CSC in in ``STANDBY`` state.
+#.  Verify (or transition) the CSC in in ``STANDBY`` state.
 
     .. code-block:: python
 
@@ -532,9 +535,8 @@ Note that when you connect to the computer running a CSC and edits the configura
 
   version: heads/tickets/DM-12345-0-g79e2257-dirty
 
-When this happen, it prevents us from precisely identifying what configuration was used.
-The preferred solution, in this case is to use :ref:`section-on-the-fly-config`.
-By doing it this way, traceability is not lost, at the expense of a couple extra minutes.
+When this happens, it prevents us from precisely identifying what configuration was used.
+In this case, the preferred solution is to use :ref:`section-on-the-fly-config` to ensure traceability is not lost, at the expense of a couple extra minutes.
 
 Exceptions
 ----------
