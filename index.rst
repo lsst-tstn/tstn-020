@@ -461,8 +461,11 @@ Following are the steps to make a new configuration available to a running CSC:
 #.  Login to the where the CSC is running.
     The procedure will vary depending on how the CSC is deployed.
     Most Telescope and Site components are deployed on containers using Kubernetes (k8s).
+    For CSCs that are not running on a container, you should be able to login to the host machine with ``ssh`` and continue with the procedure (go to step 3).
+    A provisory list of IPs can be found in `confluence <https://confluence.lsstcorp.org/x/qw6SBg>`.
     For details about the deployment system see the `deployment documentation <https://tstn-019.lsst.io>`_.
-    For those containerized components, the procedure is as follows:
+
+    The procedure to access containerized components is as follows:
 
     #.  Log in to the rancher service at https://rancher.ls.lsst.org.
         You will need special authorization to acquire an account on that service.
@@ -527,8 +530,6 @@ Following are the steps to make a new configuration available to a running CSC:
           kubectl exec -it -n cscs <pod-name> -- /bin/bash
 
         Make sure to replace ``<pod-name>`` with the name of the pod for that CSC.
-
-    For CSCs that are not running on a container, you should be able to login to the host machine with ``ssh`` and continue with the procedure.
 
 #.  Once inside the CSC host, go to the location where the configuration is installed.
     This information can be found in the CSC documentation or in the `deployment documentation`_.
