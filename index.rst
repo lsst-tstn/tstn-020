@@ -268,7 +268,7 @@ Changing the default configuration
 
 Changing the default configuration is a more involved endeavor because it entails making a change to the contents of the configuration repository.
 Because the repo is under version control, the appropriate steps must be taken.
-For this example, let's assume we want to change the default in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repo <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
+For this example, let's assume we want to change the default configuration in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repo <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
 
 
 #.  Create a JIRA ticket in where the title/description note the change being made.
@@ -288,24 +288,26 @@ For this example, let's assume we want to change the default in the ATAOS, which
 
     ::
 
-        # Labels for recommended settings; a dict of label: config_file
-        default: hex_m1_hex_202003.yaml
+        # Labels for recommended configurations; a dictionary of {label: config_file}
+        default: _base.yaml
         constant_hex: hex_m1_202003_constant_hex.yaml
 
     Say you wish to add a new configuration label called, `m1_hex`, and then make the `constant_hex` be the default.
+    Because `_base.yaml` is always assigned the label of `default`, the contents of `_base.yaml` must be updated to include the contents of `constant_hex`.
+    Then, `m1_hex` and the corresponding filename needs to be appended.
     Therefore, the file would become:
 
     ::
 
-        # Labels for recommended settings; a dict of label: config_file
-        default: hex_m1_202003_constant_hex.yaml
+        # Labels for recommended configurations; a dictionary of {label: config_file}
+        default: _base.yaml
         hex_m1: hex_m1_hex_202003.yaml
 
 #.  Add, commit and push the changes, with a commit message.
 
     ::
 
-      git commit -am "Updated default configuration label for ATAOS to use hex_m1_202003_constant_hex.yaml instead of hex_m1_hex_202003.yaml. See DM-12345 for more information."
+      git commit -am "Updated base configuration to use the configuration previously labeled constants_hex with a filename of hex_m1_hex_202003.yaml. Added hex_m1_hex_202003.yaml with label of hex_ml. See DM-12345 for more information."
       git push
 
     The commit message can add information about what changes are being made and a short description for the reason.
@@ -322,7 +324,7 @@ For this example, let's assume we want to change the default in the ATAOS, which
 
     On-the-fly changes are discouraged but sometimes a reality and are therefore discussed in :ref:`section-configuration-creating-a-new`.
 
-#.  Once the component is re-deployed with the new configuration, bring it back to ``ENABLED`` state.
+#.  Once the component is re-deployed with the new configuration, bring it from ``STANDBY`` to the ``ENABLED`` state.
     No explicit specification of the configuration is necessary since the default is being selected.
     If a different label is used, the ``configuration`` parameter must be set in the command below (see :ref:`section-configuration-interation_non_default`).
 
@@ -417,9 +419,9 @@ For other components, see the exception section below.
           Old configuration files can be kept in the repo if they still represent valid configurations otherwise, they should be removed.
           Note, though, that they will still remain available on previous versions in the git repo, enabling historical comparison.
 
-#.  Add a (commented out) description in the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration.
+#.  Add a (commented out) description in the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration, such as in `this example <https://tstn-017.lsst.io/v/PREOPS-27/_downloads/ATSpectrograph_example_config.yaml>`__, with the appropriate information.
 
-#.  Modify the configuration labels so that it maps to the new configuration (preferred) or create a new label for the new configuration.
+#.  Modify the configuration labels to either re-use a previous label to map to the new configuration (preferred) or create a new label for the new configuration.
 
         - For Salobj CSCs, this is done by editing the ``_labels.yaml`` file.
 
@@ -427,7 +429,7 @@ For other components, see the exception section below.
 
     .. prompt:: bash
 
-        git commit -am "Add new LUTs for ATAOS (file 20200512-configuration.yaml) based on data taken on 20200512. Updated default configuration for ATAOS to use the new file. Check DM-12345 for more information."
+        git commit -am "Add new LUTs for ATAOS (file 20200512-configuration.yaml) based on data taken on 20200512. Check DM-12345 for more information."
         git push
 
 #.  Test the new configuration on the CSC.
@@ -625,8 +627,7 @@ The following require different procedures to create/modify a configuration
 Appendix I: Configuration location for CSCs
 ===========================================
 
-.. note:: This appendix will contain a table relating the CSC to the
-.. configuration location
+.. note:: This appendix will contain a table relating the CSC to the location of its configuration repository
 
 
 .. _updating-deployed-csc:
