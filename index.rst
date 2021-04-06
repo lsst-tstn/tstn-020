@@ -432,8 +432,10 @@ For other components, see the exception section below.
         git commit -am "Add new LUTs for ATAOS (file 20200512-configuration.yaml) based on data taken on 20200512. Check DM-12345 for more information."
         git push
 
+#.  Verify the new configuration against the CSC's schema.
+
 #.  Test the new configuration on the CSC.
-    If this requires in-dome or on-sky testing, make sure the test is properly documented in a technote and/or Jira ticket.
+    If this requires in-dome or on-sky testing, then create an annotated alpha release tag and make sure the test is properly documented in a technote and/or Jira ticket.
     To make the configuration available on a running CSC check :ref:`section-on-the-fly-config`.
 
 #.  Create pull request(s) (PRs), with evidence that the  configuration is tested, verified and documented.
@@ -441,7 +443,8 @@ For other components, see the exception section below.
     PRs must be created for all repositories that where modified during the process, including, but not limited to, the configuration repository, ancillary software and documentation.
 
     The PRs will follow the standard review procedure.
-    Once the they are approved, merged and released the new configuration becomes official and can be deployed.
+    Once the they are approved, merged, tagged and released, the new configuration becomes official and will be deployed as part of the standard deployment process.
+
 
 .. _section-on-the-fly-config:
 
@@ -454,6 +457,13 @@ In these cases, the user should also create a Jira ticket (or work out of an exi
 Following are the steps to make a new configuration available to a running CSC:
 
 #.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 5 in :ref:`section-configuration-creating-a-new`.
+#.  Create an annotated tag following `semantic versioning`_ and using an alpha tag.
+    The tag must be created to ensure the heritage is not lost in a forced commit to the branch
+
+    .. prompt:: bash
+
+        git tag -a v1.4.0.alpha.1 -m "Updated focus values based on on-sky tests"
+
 #.  Make sure the CSC in in ``STANDBY`` state, which can be accomplished using the following command.
 
     .. code-block:: python
@@ -536,12 +546,12 @@ Following are the steps to make a new configuration available to a running CSC:
 #.  Once inside the CSC host, go to the location where the configuration is installed.
     This information can be found in the CSC documentation or in the `deployment documentation`_.
     You should be able to use regular linux command line commands (e.g. ``ls`` and ``cd``).
-#.  Once in the configuration package, update the git repository and checkout the branch with the new configuration:
+#.  Once in the configuration package, update the git repository and checkout the tag with the new configuration:
 
     .. prompt:: bash
 
       git fetch --all
-      git checkout -b tickets/DM-12345
+      git checkout tags/v1.4.0.alpha.1
 
 #.  Once the branch is updated you can re-enable the component to load the new configuration.
 
@@ -557,6 +567,8 @@ The ``version`` attribute in the ``configurationsAvailable`` event would reflect
 
 Note that it would be possible to track the configuration in the future, even if the branch is removed from the repository, by using the commit hash (``g79e2257``).
 
+.. _semantic versioning: https://semver.org/.
+
 .. _section-in-line-config:
 
 In-line changes
@@ -566,6 +578,11 @@ During commissioning, we anticipate that there will be situations where quick co
 In these cases, working out of a local branch and going over the :ref:`section-on-the-fly-config` process may result in the loss of on-sky time.
 To ensure the work/changes is tracked it is still recommended that the user create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 Then, instead of checking out the repository locally, the user can work out of the deployed CSC configuration directly in the host.
+
+.. warning::
+
+    Users cannot push changes from inside a component and therefore this method will result in a loss of information and traceability.
+    Therefore, this procedure should be reserved only for critical situations.
 
 To do this, perform the following procedure:
 
@@ -593,17 +610,12 @@ To do this, perform the following procedure:
 
         await salobj.set_summary_state(ataos, salobj.State.ENABLED)
 
-It is important to create a branch in place to work on and, later, commit-push to the repository and continue with the process afterwards.
-
-.. warning::
-
-    Users must be aware that failing to commit-push changes done in line may result in loss of information and traceability.
-    Therefore, this procedure should be reserved only for critical situations.
 
 Transient labels with Jira ticket numbers may be used for developing new configurations.
 They should be moved to standard type labels at the earliest opportunity.
 
-Note that when you connect to the computer running a CSC and edits the configuration directly, the ``version`` parameter reflect that change with something like:
+As stated in the warning above, these changes cannot be pushed from inside a component and therefore the changes made will result in a loss of information and traceability.
+When you connect to the computer running a CSC and edit the configuration directly, the ``version`` parameter reflect that change with something like:
 
 ::
 
@@ -618,7 +630,6 @@ Exceptions
 The following require different procedures to create/modify a configuration
 
 - :ref:`Main and Auxiliary Telescope Pointing Components <section-pointing-component>`
-- :ref:`M2 <section-m2>`
 - :ref:`ATMCS and ATPneumatics <section-atmcs-atpneumatics>`
 
 
@@ -672,14 +683,6 @@ The CSC is being developed by Observatory Sciences using C++.
 
     PROCEDURE TO BE ADDED
 
-.. _section-m2:
-
-M2
---
-
-.. Important::
-
-    PROCEDURE TO BE ADDED
 
 .. _section-atmcs-atpneumatics:
 
