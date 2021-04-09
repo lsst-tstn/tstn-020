@@ -14,8 +14,6 @@
 
 .. note::
 
-   **This technote is not yet published.**
-
    This manual shows users how to change, add, or revert configurations of CSCs.
 
 .. note::
@@ -49,16 +47,17 @@ The document begins with the most simple case of bringing a CSC up with a specif
 
 For more technical details about how CSCs handle configuration, see `tstn-017 <https://tstn-017.lsst.io>`__.
 
-.. _section-configuration-interation:
+.. _section-configuration-interaction:
 
 Configuration Interaction Use-Cases
 ===================================
 
 Users will interact with configurations in multiple ways.
 In many cases, a user/operator will only need to change the configuration that is currently loaded and are not concerned with the contents of the configuration itself.
+In other cases, the user/operator will need to make a change to file, then immediately reload it.
 This section illustrates example use-cases for these types of scenarios.
 
-Discovering available configurations
+Discovering Available Configurations
 ------------------------------------
 
 The easiest way to get information from a CSC programmatically is by using a Jupyter notebook server.
@@ -103,14 +102,16 @@ Often, this can also be accomplished using a high-level class that is designed t
     # This will print the mapping between label and configuration files.
     print(config_available.mapping)
 
-It is also possible to check this information by querying the EFD or through the CSC summary information interface on LOVE. Examples of how to do this using the LOVE interface will be added when the functionality is ready.
+It is also possible to check this information by querying the EFD or through the CSC summary information interface on LOVE.
+Examples of how to do this using the LOVE interface will be added when the functionality is ready.
 
 .. TODO: Add example of how to get this information from the EFD and LOVE.
 
-Selecting default configuration
--------------------------------
+Selecting the Default Configuration
+-----------------------------------
 
-In most cases, the control packages contain high-level commands to enable all components under their control, and select the default configuration in the process.
+In most cases, the control packages contain high-level commands to enable all components under their control.
+When using these packages, the default configuration for the site where it is being run is automatically selected.
 An example of this is the ATCS.
 
 .. code-block:: python
@@ -145,7 +146,7 @@ An example of this is the ATCS.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
-If working with an individual CSC, which as an operator would be a rare occurrence, default CSC configurations are loaded simply by transitioning the CSC via:
+If working with an individual CSC, which should be a special case, default CSC configurations are loaded simply by transitioning the CSC via:
 
 .. code-block:: python
 
@@ -176,17 +177,21 @@ If working with an individual CSC, which as an operator would be a rare occurren
     # Wait for script to execute
     await script.done()
 
-.. Or the LOVE interface.
+
+If these types of tasks are performed from the LOVE interface, then the same result occurs where the defaults are loaded automatically.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
 
-.. _section-configuration-interation_non_default:
+.. _section-configuration-interaction_non_default:
 
-Selecting a non-default configuration
+Selecting a Non-default Configuration
 -------------------------------------
 
 Selecting non-default configurations via control packages is also possible.
+These are generally used for circumstances where customization is required, or a fallback from standard functionality is necessary.
+For example, if the new look-up tables, which are loaded by default, in the ATAOS are causing problems then we can use this procedure to overwrite the defaults by specifying a configuration file that contains the values from the previous look-up table.
+
 A dictionary is used to override the appropriate configuration labels for each component that needs a non-default configuration.
 This example assumes the component of interest is already in the ``STANDBY`` state.
 
@@ -199,8 +204,8 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
     await atcs.start_task
 
     # ATAOS must be in STANDBY state for this to work. All other CSCs will
-    # be configured with the default label
-    await atcs.enable(configuration={'ATAOS': 'constant_hex'})
+    # use their default configurations
+    await atcs.enable(configuration={'ATAOS': 'summit_constant_hex'})
 
 .. From a Jupyter notebook, users can also launch a script by doing the following:
 
@@ -213,18 +218,18 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
 
     await queue.start_task
 
-    script = await queue.add("auxtel/enable_atcs.py", config={"ATAOS": "constant_hex"})
+    script = await queue.add("auxtel/enable_atcs.py", config={"ATAOS": "summit_constant_hex"})
 
     # Wait for script to execute
     await script.done()
 
 .. And from the LOVE interface:
 
-Examples of how to do this using the LOVE interface will be added when the functionality is ready.
+Examples of how to do this using the LOVE interface will be added soon.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
-If working with an individual CSC, which as an operator would be a rare occurrence, the ``salobj.Remotes`` class may be more appropriate:
+If working with an individual CSC, which should be a special case, the ``salobj.Remotes`` class may be more appropriate:
 
 .. code-block:: python
 
@@ -237,7 +242,7 @@ If working with an individual CSC, which as an operator would be a rare occurren
     await atdome.start_task()
 
     await salobj.set_summary_state(
-    atdome, salobj.State.ENABLED, configurationToApply="original-install"
+    atdome, salobj.State.ENABLED, configurationToApply="simple_algorithm"
     )
 
 .. And to launch a ``Script`` from Jupyter:
@@ -251,7 +256,7 @@ If working with an individual CSC, which as an operator would be a rare occurren
 
     await queue.start_task
 
-    script = await queue.add("set_summary_state", config={"data": [("ATDome", "ENABLED", "original-install")]})
+    script = await queue.add("set_summary_state", config={"data": [("ATDome", "ENABLED", "simple_algorithm]})
 
     # Wait for script to execute
     await script.done()
@@ -260,126 +265,86 @@ If working with an individual CSC, which as an operator would be a rare occurren
 
 .. TODO: Add example on how to launch script from LOVE interface
 
+..
+    .. _section-configuration-interaction_changing_default:
 
-.. _section-configuration-interation_changing_default:
+    Changing a Configuration
+    --------------------------------
 
-Changing the default configuration
-----------------------------------
-
-Changing the default configuration is a more involved endeavor because it entails making a change to the contents of the configuration repository.
-Because the repo is under version control, the appropriate steps must be taken.
-For this example, let's assume we want to change the default configuration in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repo <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
-
-
-#.  Create a JIRA ticket in where the title/description note the change being made.
-    Let's assume it creates ticket DM-12345.
-
-#.  Clone the repo and checkout a new branch
-
-    ::
-
-      git clone git@github.com:lsst-ts/ts_config_attcs.git
-      git checkout -b tickets/DM-12345
-
-    Note that the branch name is the word ``tickets/`` appended with the Jira ticket name.
-
-#.  Open the most recent schema version (v2) and modify the contents of ``_labels.yaml``.
-    For example, the original version may be:
-
-    ::
-
-        # Labels for recommended configurations; a dictionary of {label: config_file}
-        default: _base.yaml
-        constant_hex: hex_m1_202003_constant_hex.yaml
-
-    Say you wish to add a new configuration label called, `m1_hex`, and then make the `constant_hex` be the default.
-    Because `_base.yaml` is always assigned the label of `default`, the contents of `_base.yaml` must be updated to include the contents of `constant_hex`.
-    Then, `m1_hex` and the corresponding filename needs to be appended.
-    Therefore, the file would become:
-
-    ::
-
-        # Labels for recommended configurations; a dictionary of {label: config_file}
-        default: _base.yaml
-        hex_m1: hex_m1_hex_202003.yaml
-
-#.  Add, commit and push the changes, with a commit message.
-
-    ::
-
-      git commit -am "Updated base configuration to use the configuration previously labeled constants_hex with a filename of hex_m1_hex_202003.yaml. Added hex_m1_hex_202003.yaml with label of hex_ml. See DM-12345 for more information."
-      git push
-
-    The commit message can add information about what changes are being made and a short description for the reason.
-    It is also recommended to explicitly mention the Jira ticket for the work being done as the branch name is lost once the changes are merged to the head branch.
-
-#.  If this is a normal configuration change procedure, then create a pull-request (PR), and have it reviewed, merged and released.
-
-    .. TODO: Fix/Edit/Verify the example below to checkout a local version of
-    .. the repo, then set it up accordingly.
+    There are three different files in which a configuration parameter can be changed, but the procedure is largely the same.
+    In all cases it entails making a change to the contents of the configuration repository.
+    Because the repo is under version control, the appropriate steps must be taken.
+    For this example, let's assume we want to change a site-specific default configuration parameter (e.g. ``_summit.yaml``) in the ATAOS, which is found in the `ATAOS directory of the ts_config_attcs repository <https://github.com/lsst-ts/ts_config_attcs/tree/develop/ATAOS>`__.
+    Although this procedure discusses how to modify a site-specific default configuration file, the process is the same for the initial configuration file (``_init.yaml``) and any over-ride configuration file.
 
 
-#.  Once the new configuration is released it can be made available to the component, which will not automatically see the newly created configuration.
-    During normal operations this involves creating a new deployable artifact and updating the deployment to use the new configuration version.
+    #.  Create a JIRA ticket in where the title/description note the change being made.
+        Let's assume it creates ticket DM-12345.
 
-    On-the-fly changes are discouraged but sometimes a reality and are therefore discussed in :ref:`section-configuration-creating-a-new`.
+    #.  Clone the repo and checkout a new branch
 
-#.  Once the component is re-deployed with the new configuration, bring it from ``STANDBY`` to the ``ENABLED`` state.
-    No explicit specification of the configuration is necessary since the default is being selected.
-    If a different label is used, the ``configuration`` parameter must be set in the command below (see :ref:`section-configuration-interation_non_default`).
+        ::
 
-    .. code-block:: python
+          git clone git@github.com:lsst-ts/ts_config_attcs.git
+          git checkout -b tickets/DM-12345
 
-        await salobj.set_summary_state(ataos, salobj.State.ENABLED)
+        Note that the branch name is the word ``tickets/`` appended with the Jira ticket name.
 
+    #.  If changing an over-ride configuration file, then open the most recent schema version (v2) and modify the contents of ``_labels.yaml``.
+        For example, the original version may be:
 
-.. _section-configuration-interaction-traceability:
+        ::
 
-Finding a previously used configuration
----------------------------------------
+            # Labels for recommended configurations; a dictionary of {label: config_file}
+            constant_hex: hex_m1_202003_constant_hex.yaml
 
-In the future, one may want to verify which configuration was being used for a given observation.
-Because we often use generic labels (e.g. `default`), and file contents can change with time, creating a robust version controlled system must go beyond simply changing filenames.
-For this reason, additional metadata is associated with each configuration, notably the ``url`` and ``version`` parameters in both the ``configurationsAvailable`` and ``configurationApplied`` events.
-These parameters are key to ensuring that each configuration is unique, and is traceable to their filename and contents.
+        Say you wish to add a new configuration label called, `m1_hex`, and then make the `constant_hex` be the default.
+        Because `_base.yaml` is always assigned the label of `default`, the contents of `_base.yaml` must be updated to include the contents of `constant_hex`.
+        Then, `m1_hex` and the corresponding filename needs to be appended.
+        Therefore, the file would become:
 
-The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repository).
-The ``version`` parameter is more complicated.
-For all CSCs (except the camera?), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
-This is what is output by running the following command in a configuration repository (e.g. ``ts_config_latiss``):
+        ::
 
-.. prompt:: bash
+            # Labels for recommended configurations; a dictionary of {label: config_file}
+            constant_hex: hex_m1_202003_constant_hex.yaml
+            hex_m1: hex_m1_hex_202003.yaml
 
-    git describe --all --long --always --dirty --broken
+    #.  Add, commit and push the changes, with a commit message.
 
-.. [#git_version] The option ``--broken`` was introduced in git 2.13.7
+        ::
 
-An example output is, ``heads/develop-0-gc89ef1a``.
-The repository branch (or tag) name forms the first part of the branch description.
-This first part contain individual identifiers and can change rapidly.
-It may take any form necessary to convey the appropriate information.
-The last 7 characters (``c89ef1a``) is the hash of the commit of the loaded configuration file.
-Users can find this commit by navigating to the repository on github, searching for the commit hash, then
-clicking on the "commits" section of the search results, as shown in :ref:`the screenshot below <fig-commit-tracing>`.
+          git commit -am "Updated base configuration to use the configuration previously labeled constants_hex with a filename of hex_m1_hex_202003.yaml. Added hex_m1_hex_202003.yaml with label of hex_ml. See DM-12345 for more information."
+          git push
 
-.. figure:: /_static/tracing_a_commit_on_github.jpg
-    :name: fig-commit-tracing
+        The commit message can add information about what changes are being made and a short description for the reason.
+        It is also recommended to explicitly mention the Jira ticket for the work being done as the branch name is lost once the changes are merged to the head branch.
 
-    Using the ``version`` output in the ``configurationApplied`` event, it is possible to traceback the repo to the configuration that was loaded.
+    #.  If this is a normal configuration change procedure, then create a pull-request (PR), and have it reviewed, merged and released.
+
+        .. TODO: Fix/Edit/Verify the example below to checkout a local version of
+        .. the repo, then set it up accordingly.
 
 
-Exceptions
-----------
-TBR.
+    #.  Once the new configuration is released it can be made available to the component, which will not automatically see the newly created configuration.
+        During normal operations this involves creating a new deployable artifact and updating the deployment to use the new configuration version.
 
-.. TODO: Complete this section
+        On-the-fly changes are discouraged but sometimes a reality and are therefore discussed in :ref:`section-configuration-creating-a-new`.
+
+    #.  Once the component is re-deployed with the new configuration, bring it from ``STANDBY`` to the ``ENABLED`` state.
+        No explicit specification of the configuration is necessary since the default is being selected.
+        If a different label is used, the ``configuration`` parameter must be set in the command below (see :ref:`section-configuration-interaction_non_default`).
+
+        .. code-block:: python
+
+            await salobj.set_summary_state(ataos, salobj.State.ENABLED)
+
 
 .. _section-configuration-creating-a-new:
 
-Creating a new configuration
-============================
+Modifying or Creating a New Configuration
+=========================================
 
-The process to derive new configuration parameters will vary considerably from component to component.
+The process to derive new configuration parameters varies considerably from component to component.
 In some cases, the configuration is simple enough that a change may involve simply replacing an IP or hostname value, a routine filter swap on an instrument or updating the limits to an axis range due to some evolving condition.
 On the other hand, deriving new parameters may involve generating complex LUTs that may require on sky observations and detailed data analysis.
 
@@ -413,17 +378,20 @@ For other components, see the exception section below.
 
     Any intermediate data product(s) generated in the process should also be stored in the `git Large File Storage <https://developer.lsst.io/git/git-lfs.html>`__  or, if size permits, with the software repository itself.
 
-#.  Edit/Add/Replace the configuration file(s) or add a new file(s) to host the new configuration in the CSC configuration directory.
+#.  Edit/Add/Replace the configuration file(s) in the CSC's configuration directory.
 
-        - Ideally the name of the file should reflect the purpose of change, dates can also be used as well.
-          Old configuration files can be kept in the repo if they still represent valid configurations otherwise, they should be removed.
-          Note, though, that they will still remain available on previous versions in the git repo, enabling historical comparison.
+        - If editing the ``_init.yaml`` or a ``_<site>.yaml`` file, the name must remain unchanged.
+        - If editing or adding an configuration override file, ideally the name of the file should reflect the purpose of change; dates can also be used as well.
+          Old configuration files can be kept in the repo if they still represent valid configurations. Otherwise, they should be removed.
+          Note, though, that they will still remain available on previous commits in the git repo, enabling historical comparison.
 
-#.  Add a (commented out) description in the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration, such as in `this example <https://tstn-017.lsst.io/v/PREOPS-27/_downloads/ATSpectrograph_example_config.yaml>`__, with the appropriate information.
+#.  Fill out the required metadata at the top of the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration, such as in `this example <https://tstn-017.lsst.io/v/PREOPS-27/_downloads/ATSpectrograph_example_config.yaml>`__.
 
-#.  Modify the configuration labels to either re-use a previous label to map to the new configuration (preferred) or create a new label for the new configuration.
+#.  If adding or modifying an override configuration (meaning not ``_init.yaml`` or ``_site.yaml``), modify the configuration labels to either re-use a previous label to map to the new configuration (preferred) or create a new label for the new configuration.
 
         - For Salobj CSCs, this is done by editing the ``_labels.yaml`` file.
+
+#.  If you have an environment to do so, such as the standard T&S development container, run the unit tests in the package locally.
 
 #.  Add, commit and push the changes, with a commit message.
 
@@ -432,13 +400,13 @@ For other components, see the exception section below.
         git commit -am "Add new LUTs for ATAOS (file 20200512-configuration.yaml) based on data taken on 20200512. Check DM-12345 for more information."
         git push
 
-#.  Verify the new configuration against the CSC's schema.
+#. Verify the continuous integration tests pass. If they don't, fix the issue and repeat the previous step.
 
 #.  Test the new configuration on the CSC.
-    If this requires in-dome or on-sky testing, then create an annotated alpha release tag and make sure the test is properly documented in a technote and/or Jira ticket.
+    If this requires in-dome or on-sky testing, then create an annotated alpha release tag. Then make sure the test is properly documented in a technote and/or Jira ticket.
     To make the configuration available on a running CSC check :ref:`section-on-the-fly-config`.
 
-#.  Create pull request(s) (PRs), with evidence that the  configuration is tested, verified and documented.
+#.  Create pull request(s) (PRs) to have the files reviewed
 
     PRs must be created for all repositories that where modified during the process, including, but not limited to, the configuration repository, ancillary software and documentation.
 
@@ -446,18 +414,60 @@ For other components, see the exception section below.
     Once the they are approved, merged, tagged and released, the new configuration becomes official and will be deployed as part of the standard deployment process.
 
 
+Exceptions
+----------
+TBR.
+
+..
+    TODO: Complete this section - Is this section meant to document procedures for non-Salobj CSCs?
+
+.. _section-configuration-interaction-traceability:
+
+Finding a Previously Used Configuration
+---------------------------------------
+
+In the future, one may want to verify which configuration was being used for a given observation.
+Because we often use generic labels (e.g. `_simple_algorithm`), and file contents can change with time, creating a robust version controlled system must go beyond simply changing filenames.
+For this reason, additional metadata is associated with each configuration, notably the ``url`` and ``version`` parameters in both the ``configurationsAvailable`` and ``configurationApplied`` events.
+These parameters are key to ensuring that each configuration is unique, and is traceable to their filename and contents.
+
+The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repository).
+The ``version`` parameter is more complicated.
+For all CSCs (except possibly the cameras), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
+This is what is output by running the following command in a configuration repository (e.g. ``ts_config_latiss``):
+
+.. prompt:: bash
+
+    git describe --all --long --always --dirty --broken
+
+.. [#git_version] The option ``--broken`` was introduced in git 2.13.7
+
+An example output is, ``heads/develop-0-gc89ef1a``.
+The repository branch (or tag) name forms the first part of the branch description.
+This first part contain individual identifiers and can change rapidly.
+It may take any form necessary to convey the appropriate information.
+The last 7 characters (``c89ef1a``) is the hash of the commit of the loaded configuration file.
+Users can find this commit by navigating to the repository on github, searching for the commit hash, then
+clicking on the "commits" section of the search results, as shown in :ref:`the screenshot below <fig-commit-tracing>`.
+
+.. figure:: /_static/tracing_a_commit_on_github.jpg
+    :name: fig-commit-tracing
+
+    Using the ``version`` output in the ``configurationApplied`` event, it is possible to traceback the repo to the configuration that was loaded.
+
+
 .. _section-on-the-fly-config:
 
-On-the-fly changes
-------------------
+On-the-Fly Configuration Changes
+--------------------------------
 
 During the process of creating a new configuration (:ref:`section-configuration-creating-a-new`) or during a commissioning/engineering run, it may be necessary to make a new configuration available to a running CSC for testing without rebuilding/re-deploying the component.
 In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 
 Following are the steps to make a new configuration available to a running CSC:
 
-#.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 5 in :ref:`section-configuration-creating-a-new`.
-#.  Create an annotated tag following `semantic versioning`_ and using an alpha tag.
+#.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 8 in :ref:`section-configuration-creating-a-new`.
+#.  Create an annotated tag alpha tag following `semantic versioning`_.
     The tag must be created to ensure the heritage is not lost in a forced commit to the branch
 
     .. prompt:: bash
@@ -474,7 +484,7 @@ Following are the steps to make a new configuration available to a running CSC:
     The procedure will vary depending on how the CSC is deployed.
     Most Telescope and Site components are deployed on containers using Kubernetes (k8s).
     For CSCs that are not running on a container, you should be able to login to the host machine with ``ssh`` and continue with the procedure (go to step 3).
-    A provisory list of IPs can be found in `confluence <https://confluence.lsstcorp.org/x/qw6SBg>`.
+    A provisional list of IPs can be found in `confluence <https://confluence.lsstcorp.org/x/qw6SBg>`.
     For details about the deployment system see the `deployment documentation <https://tstn-019.lsst.io>`_.
 
     The procedure to access containerized components is as follows:
@@ -546,26 +556,37 @@ Following are the steps to make a new configuration available to a running CSC:
 #.  Once inside the CSC host, go to the location where the configuration is installed.
     This information can be found in the CSC documentation or in the `deployment documentation`_.
     You should be able to use regular linux command line commands (e.g. ``ls`` and ``cd``).
-#.  Once in the configuration package, update the git repository and checkout the tag with the new configuration:
+#.  Once in the cloned configuration package, update the git repository and checkout the tag with the new configuration:
 
     .. prompt:: bash
 
       git fetch --all
       git checkout tags/v1.4.0.alpha.1
 
-#.  Once the branch is updated you can re-enable the component to load the new configuration.
+    You should see the new tag be pulled and git will tell you that you've changed tags/branches.
+
+#.  Now re-enable the component to load the new configuration.
+
+    If the ``_init.yaml`` or ``_<site>.yaml`` file was modified then use the following:
 
     .. code-block:: python
 
         await salobj.set_summary_state(ataos, salobj.State.ENABLED)
 
+    If an override configuration was modified/added, then you must specify it using the ``configurationToApply`` keyword
+
+    .. code-block:: python
+
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED, configurationToApply='summit_constant_hex')
+
+
 The ``version`` attribute in the ``configurationsAvailable`` event would reflect that change with something like:
 
 ::
 
-  version: heads/tickets/DM-12345-0-g79e2257
+  version: heads/tags/v1.4.0.alpha.1-g79e2257
 
-Note that it would be possible to track the configuration in the future, even if the branch is removed from the repository, by using the commit hash (``g79e2257``).
+Note that it would be possible to track the configuration in the future by using the commit hash (``g79e2257``).
 
 .. _semantic versioning: https://semver.org/.
 
@@ -597,7 +618,7 @@ To do this, perform the following procedure:
     For containerized components, you can find details on how to do that in the `deployment documentation <https://tstn-019.lsst.io>`_.
 #.  Once inside the CSC host, go to the location where the configuration is installed.
     This information can be found in the CSC documentation or in the `deployment documentation`_.
-#.  Create a local branch to work on.
+#.  Create a local branch to work on that corresponds to the Jira ticket mentioned above.
 
     .. prompt:: bash
 
@@ -640,31 +661,9 @@ Appendix I: Configuration location for CSCs
 
 .. note:: This appendix will contain a table relating the CSC to the location of its configuration repository
 
-
-.. _updating-deployed-csc:
-
-Appendix II: Updating Deployed CSCs
-===================================
-
-.. TODO: Example where you change code inside a container (scriptQueue)
-
-.. TODO: Example where you deploy a new container (scriptQueue)
-
-
-.. Important::
-
-    Needs completing. Might be better to have this as a separate document.
-
-.. _updating-control-packages:
-
-Appendix III: Updating Control Packages
-=======================================
-
-TBD
-
 .. _section-appendix-configuration-non-salObj:
 
-Appendix IV: Creating Configurations for non-salObj CSCs
+Appendix II: Creating Configurations for non-salObj CSCs
 =========================================================
 
 This appendix details the require procedures to produce configuration files for specific CSCs.
