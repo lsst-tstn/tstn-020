@@ -48,23 +48,31 @@ For more technical details about how CSCs handle configuration, see `tstn-017 <h
 Configuration Repositories and Files
 ====================================
 
-Because we need to be able to modify configurations without re-deploying components, configuration files are stored in their own repositories and kept separated from code.
+It is important to have the ability to modify configurations without re-deploying components, therefore, configuration files are stored in their own repositories and kept separated from the code.
 The configuration repository associated with each CSC is found in the configuration column of the `Master CSC Table`_.
-A single configuration repository often contains configuration files for multiple CSCs, each with it's own folder.
-Inside the a given CSC folder, the configuration files are then arranged into folders according to the version.
-Inside a folder for a given version contains up to three different types of configuration files, all of which are yaml files.
-The three different configuration files correspond to the levels and order in which they are read.
-Any parameter specified in a higher-level configuration file will over-write any value that is declared at a lower-level.
+Each of these configuration repositories are organized as follows:
 
-    #. ``_init.yaml`` This **required** file contains all values that are expected to be common to all sites and/or be relatively static in operations.
-       This file may contain a complete set of parameters, but is only required to do so if no site-specific configuration file exists.
+- A single configuration repository may host configurations for multiple CSCs.
+- CSC configurations are stored in folders with the CSC name.
+- Each CSC folder contains sub-folders corresponding to the versions of the CSC configuration (e.g. ``v1``, ``v2``).
+- A folder for a given version contains up to three different **types** of configuration files, all of which are yaml files.
+  The three types of configuration are:
 
-    #. ``_<site>.yaml`` This **optional** file contains contain site specific configuration parameters such as IP addresses and ports.
-       Many CSCs have site specific files.
-       Between this file and the ``_init.yaml`` file, **the configuration must be fully defined**
+    #. Initial Configuration: ``_init.yaml``.
+        - This **required** file contains all values that are expected to be common to all sites and/or be relatively static in operations.
+          This file may contain a complete set of parameters, but is only required to do so if no site-specific configuration file exists.
 
-    #. ``filename.yaml`` - These **optional** files, referred to as configuration overrides, are only to be used when the values declared in the previous files require changes.
-       These files are loaded manually by the users as is demonstrated in the section-configuration-interaction_.
+    #. Site-specific Configuration: ``_summit.yaml``, ``_ncsa.yaml``, ``_base.yaml`` etc.
+        - This **optional** file contains contain site specific configuration parameters such as IP addresses and ports.
+          Many CSCs have site specific files.
+          Between this file and the ``_init.yaml`` file, **the configuration must be fully defined**
+
+    #. Configuration overrides: ``filename.yaml``
+        - These **optional** files, referred to as configuration overrides, are only to be used when the values declared in the previous files require changes.
+          These files are loaded manually by the users as is demonstrated in the section-configuration-interaction_.
+
+- The three different configuration files correspond to the levels and order in which they are read.
+- Any parameter specified in a higher-level configuration file will override any value that is declared at a lower-level.
 
 For more technical details about how CSCs handle configurations, see `tstn-017 <https://tstn-017.lsst.io>`__.
 
@@ -216,9 +224,9 @@ Selecting an Override Configuration
 
 Selecting non-default configurations via control packages is also possible.
 These are generally used for circumstances where customization is required, or a fallback from standard functionality is necessary.
-For example, if the new look-up tables, which are loaded by default, in the ATAOS are causing problems then we can use this procedure to overwrite the defaults by specifying a configuration file that contains the values from the previous look-up table.
+For example, if the new look-up tables, which are loaded by default, in the ATAOS are causing problems then we can use this procedure to override the defaults by specifying a configuration file that contains the values from the previous look-up table.
 
-A dictionary is used to override the appropriate configuration override files for each component that needs a non-default configuration.
+A dictionary is used to provide the appropriate configuration override files for each component that needs a non-default configuration.
 This example assumes the component of interest is already in the ``STANDBY`` state.
 
 .. code-block:: python
@@ -244,7 +252,7 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
 
     await queue.start_task
 
-    script = await queue.add("auxtel/enable_atcs.py", config={"ATAOS": "summit_constant_hex"})
+    script = await queue.add("auxtel/enable_atcs.py", config={"ATAOS": "summit_constant_hex.yaml"})
 
     # Wait for script to execute
     await script.done()
@@ -268,7 +276,7 @@ If working with an individual CSC, which should be a special case, the ``salobj.
     await atdome.start_task()
 
     await salobj.set_summary_state(
-    atdome, salobj.State.ENABLED, configurationOverride="simple_algorithm"
+    atdome, salobj.State.ENABLED, configurationOverride="simple_algorithm.yaml"
     )
 
 .. And to launch a ``Script`` from Jupyter:
@@ -282,7 +290,7 @@ If working with an individual CSC, which should be a special case, the ``salobj.
 
     await queue.start_task
 
-    script = await queue.add("set_summary_state", config={"data": [("ATDome", "ENABLED", "simple_algorithm]})
+    script = await queue.add("set_summary_state", config={"data": [("ATDome", "ENABLED", "simple_algorithm.yaml]})
 
     # Wait for script to execute
     await script.done()
@@ -305,13 +313,13 @@ For other components, see the exception section below.
 
 
 #.  Create a Jira ticket to track the work being done (e.g. DM-12345).
-    If details or discussions are needed they can done using the Jira tickets itself.
+    If details or discussions are needed they can done using the Jira ticket itself.
+    Then clone the configuration repository and create a new branch corresponding to the Jira ticket number.
 
     .. prompt:: bash
 
         git clone git@github.com:lsst-ts/ts_config_attcs.git
         git checkout -b tickets/DM-12345
-
 
 #.  Execute the work needed to derive the new configuration parameter(s).
 
@@ -324,6 +332,7 @@ For other components, see the exception section below.
     When working with Telescope and Site components, any software required during this process should be stored in a git repository in `T&S GitHub organization <https://github.com/orgs/lsst-ts>`__, and should follow the standard `T&S development workflow guidelines <https://tssw-developer.lsst.io>`__.
     This includes, but is not limited to, EFD queries, Jupyter notebooks, other data analysis routines (regardless of the programming language) and so on.
     The preferred location for storing Jupyter notebooks is the `ts_notebooks <https://github.com/lsst-ts/ts_notebooks>`__ repository.
+    If the procedure to generate the new configuration requires detailed explanation, a tech-note in tstn repository can be created and linked to the ticket.
 
     ..    Details on how to deals with Camera and DM components will be given in the
     ..    future.
@@ -339,7 +348,6 @@ For other components, see the exception section below.
 
 #.  Fill out the required metadata at the top of the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration, such as in `this example <https://tstn-017.lsst.io/v/PREOPS-27/_downloads/ATSpectrograph_example_config.yaml>`__.
 
-
 #.  If you have an environment to do so, such as the standard T&S development container, run the unit tests in the package locally.
 
 #.  Add, commit and push the changes, with a commit message.
@@ -352,7 +360,8 @@ For other components, see the exception section below.
 #. Verify the continuous integration tests pass. If they don't, fix the issue and repeat the previous step.
 
 #.  Test the new configuration on the CSC.
-    If this requires in-dome or on-sky testing, then create an annotated alpha release tag. Then make sure the test is properly documented in a technote and/or Jira ticket.
+    If this requires in-dome or on-sky testing, then create an annotated alpha release tag.
+    Then make sure the test is properly documented in a technote and/or Jira ticket.
     To make the configuration available on a running CSC check :ref:`section-on-the-fly-config`.
 
 #.  Create pull request(s) (PRs) to have the files reviewed
