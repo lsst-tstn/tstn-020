@@ -31,7 +31,7 @@ The Vera Rubin Observatory control system is highly distributed, containing mult
 In order to achieve reliable operation it is fundamental to guarantee that observers must be able to, at any point, identify what set of configurations a component is using, what sets are available to be loaded, and how to load the configuration they choose.
 During commissioning and engineering runs, users will also be interested in building, validating and verifying new sets of configurations.
 
-The content needing to be configured and how that content is derived varies considerably for each component.
+Although the configuration data structures (e.g. schemas) vary considerably between components, the process to update them is standardized.
 In some cases, the configuration may be a simple set of host name and port that the component connects to.
 In other cases, the configuration may require the calculation of complex lookup tables (e.g. M1M3 and M2) or model coefficients (e.g. pointing component).
 These may require on-sky time for acquiring the data, and complex software to analyze and derive the configuration products.
@@ -56,7 +56,7 @@ Each of these configuration repositories are organized as follows:
 - CSC configurations are stored in folders with the CSC name.
 - Each CSC folder contains sub-folders corresponding to the versions of the CSC configuration (e.g. ``v1``, ``v2``).
 - A folder for a given version contains up to three different **types** of configuration files, all of which are yaml files.
-  The three types of configuration are:
+  The three types of configuration files are detailed below and are listed in the order of which they are read:
 
     #. Initial Configuration: ``_init.yaml``.
         - This **required** file contains all values that are expected to be common to all sites and/or be relatively static in operations.
@@ -71,8 +71,9 @@ Each of these configuration repositories are organized as follows:
         - These **optional** files, referred to as configuration overrides, are only to be used when the values declared in the previous files require changes.
           These files are loaded manually by the users as is demonstrated in the section-configuration-interaction_.
 
-- The three different configuration files correspond to the levels and order in which they are read.
-- Any parameter specified in a higher-level configuration file will override any value that is declared at a lower-level.
+- If a value is specified in more than one of these files, the most recently seen value is used.
+  This means that values in the site-specific (``_<site>.yaml``) file override values in the initial file (``_init.yaml``).
+  Also, values in the override file (``filename.yaml``) override values populated in the ``_init.yaml`` and ``_<site>.yaml`` files.
 
 For more technical details about how CSCs handle configurations, see `tstn-017 <https://tstn-017.lsst.io>`__.
 
@@ -92,10 +93,13 @@ This section illustrates example use-cases for these types of scenarios.
 Selecting the Default Configuration
 -----------------------------------
 
+In the high majority of cases, users will want to load the default configuration.
+The default configuration consists of parameters in the `_init.yaml` file and subsequently the `_<site>.yaml`, if it is present.
+These files are loaded automatically when performing state transitions using salobj or any higher-level software.
+
 In most cases, the control packages contain high-level commands to enable all components under their control.
 An example of this is the ATCS.
-The default configuration, which consists of parameters in the `_init.yaml` file and subsequently the `_<site>.yaml` file are loaded automatically.
-Note that not all CSCs will have a `_<site>.yaml` file, and therefore all configuration information will be in the `_init.yaml` file.
+The following example enables all ATCS controlled components using their default configurations.
 
 .. code-block:: python
 
@@ -129,7 +133,7 @@ Note that not all CSCs will have a `_<site>.yaml` file, and therefore all config
 
 .. TODO: Add example on how to launch script from LOVE interface
 
-If working with an individual CSC, which should be a special case, default CSC configurations are loaded simply by transitioning the CSC via:
+If working with an individual CSC, which should be a special case, default CSC configurations are loaded by directly transitioning the CSC via:
 
 .. code-block:: python
 
@@ -191,7 +195,7 @@ This is done using a ``salobj.Remote`` class.
     print(config_available.configurations)
 
     # This will print the git hash of the loaded configuration repository
-    print(config_available.versions)
+    print(config_available.version)
 
 Often, this can also be accomplished using a high-level class that is designed to interact with a group of CSCs.
 
@@ -209,7 +213,7 @@ Often, this can also be accomplished using a high-level class that is designed t
     print(config_available.configurations)
 
     # This will print the git hash of the loaded configuration repository
-    print(config_available.versions)
+    print(config_available.version)
 
 It is also possible to check this information by querying the EFD or through the CSC summary information interface on LOVE.
 Examples of how to do this using the LOVE interface will be added when the functionality is ready.
@@ -220,13 +224,13 @@ Examples of how to do this using the LOVE interface will be added when the funct
 .. _section-configuration-interaction_non_default:
 
 Selecting an Override Configuration
--------------------------------------
+-----------------------------------
 
 Selecting non-default configurations via control packages is also possible.
 These are generally used for circumstances where customization is required, or a fallback from standard functionality is necessary.
-For example, if the new look-up tables, which are loaded by default, in the ATAOS are causing problems then we can use this procedure to override the defaults by specifying a configuration file that contains the values from the previous look-up table.
+For example, if the look-up tables in the default configuration for the ATAOS are causing problems, then we can use this procedure to override the defaults by specifying a configuration file that contains the values from the previous look-up table.
 
-A dictionary is used to provide the appropriate configuration override files for each component that needs a non-default configuration.
+When enabling components using the ATCS class, a dictionary is used to provide the appropriate configuration override files for each component that needs a non-default configuration.
 This example assumes the component of interest is already in the ``STANDBY`` state.
 
 .. code-block:: python
@@ -366,10 +370,10 @@ For other components, see the exception section below.
 
 #.  Create pull request(s) (PRs) to have the files reviewed
 
-    PRs must be created for all repositories that where modified during the process, including, but not limited to, the configuration repository, ancillary software and documentation.
+    You must create PRs for all repositories that were modified during the process, including, but not limited to, the configuration repository, ancillary software and documentation.
 
-    The PRs will follow the standard review procedure.
-    Once the they are approved, merged, tagged and released, the new configuration becomes official and will be deployed as part of the standard deployment process.
+    Once the PRs are reviewed and approved, the files can be merged and subsequently tagged.
+    The new configuration then becomes official and will be deployed as part of the standard deployment process.
 
 
 Exceptions
@@ -413,8 +417,8 @@ clicking on the "commits" section of the search results, as shown in :ref:`the s
 
     Using the ``version`` output in the ``configurationApplied`` event, it is possible to traceback the repo to the configuration that was loaded.
 
-Once we have identified the hash of the commit file we want to reload, we can do that without having to make any changes to the currently deployed software.
-If we simply want to use the default configuration for a given CSC we can simply specify the commit hash with a preceding colon (``:``) as follows:
+Once we have identified the hash of the commit file we want to reload, we can do that without having to make any changes to the currently deployed ts_config package.
+If we simply want to use the default site-specific configuration for a given CSC, we can specify the commit hash with a preceding colon (``:``) as follows:
 
 .. code-block:: python
 
@@ -613,7 +617,7 @@ Transient filenames with Jira ticket numbers may be used for developing new conf
 They should be moved to a more purpose-oriented filename at the earliest opportunity.
 
 As stated in the warning above, these changes cannot be pushed from inside a component and therefore the changes made will result in a loss of information and traceability.
-When you connect to the computer running a CSC and edit the configuration directly, the ``version`` parameter reflect that change with something like:
+When you connect to the computer running a CSC and edit the configuration directly, the ``version`` parameter reflects that change with something like:
 
 ::
 
@@ -671,7 +675,7 @@ Some CSCs will not be configurable at all.
 Examples are sparse in our current architecture but, the from Salobj point of view, a CSC can be developed on top of a ``BaseCSC`` which makes it a non-configurable component.
 Non-configurable CSCs will have no data in the configuration column of the `Master CSC Table`_.
 
-A non-configurable CSC will ignore the ``configurationOverride`` attribute of the ``start`` command, as it does not contain any true meaning to it.
+A non-configurable CSC will ignore the ``configurationOverride`` parameter of the ``start`` command, as it has no meaning.
 Likewise these CSCs will not output any of the configuration-related events.
 
 
