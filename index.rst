@@ -10,17 +10,22 @@
 
 .. sectnum::
 
+.. warning::
+
+    This guide is written under the assumption that the configuration handling proposed in LCR-2269 is accepted.
+    This includes the changes discussed in `Proposal For Improvements section of tstn-017 <https://tstn-017.lsst.io/#proposal-for-improvements>`_.
+    The procedures in this documents are still under development.
+    The functionality referenced here is not in place nor has it been agreed upon as the proper implementation.
+
+    **For the time being, this document should be considered a proposed implementation.**
+    Upon completion of the LCR, tstn-017 will be deprecated and the applicable content will be moved here such that this becomes both a user and implementation guide.
+
 .. note::
 
     This manual shows users how to change, add, or revert configurations of all CSCs.
     This document is intended for operators of the Vera Rubin observatory control system.
     It consolidates information about how to handle CSC configuration and ancillary data.
     After reading this document users should know what to expect when interacting with system component's configuration, how to select a configuration for a component and, be able to create and load new configurations.
-
-.. warning::
-
-    The procedures in this documents are still under development. The functionality referenced here is not in place nor has it been agreed upon as the proper implementation.
-    **For the time being, this document should be considered a proposed implementation.**
 
 .. _section-introduction:
 
@@ -43,7 +48,7 @@ The document begins with the most simple case of bringing a CSC up with a specif
 Most CSCs handle configuration in the same manner, however, there are a few exception to the rule, notably the Camera CSCs.
 These special cases are addressed in section-appendix-configuration-non-salObj_.
 
-For more technical details about how CSCs handle configuration, see `tstn-017 <https://tstn-017.lsst.io>`__.
+For more technical details about how CSCs handle configuration, including the definition of configuration related topics published by the CSC, see `tstn-017 <https://tstn-017.lsst.io>`__.
 
 Configuration Repositories and Files
 ====================================
