@@ -1,0 +1,16 @@
+# This is a site specific (and therefore a default) configuration to be used by the ATSpectrograph.
+# See tstn-020.lsst.io for a description of how to interact with CSC configurations.
+# The first section of this configuration file contains metadata fields specific to this file.
+# The fields are used for heritage tracking and knowledge transfer only.
+metadata:
+   ticket: DM-24808
+   date_created: 2020-05-24
+   version: v3
+   modifications : Added central wavelength attribute in filters to support new ATAOS wavelength dependence functionality
+   description: >-
+      Contains all parameters for ATSpectrograph that are specific to the summit site.
+      Description of each property is found with the schema located in the ts_atspec CSC repository.
+
+# Below are the site-specific configurable parameters
+instrument_port: 2
+host: 139.229.170.44

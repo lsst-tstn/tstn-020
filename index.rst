@@ -10,21 +10,12 @@
 
 .. sectnum::
 
-.. warning::
-
-    This guide is written under the assumption that the configuration handling proposed in LCR-2269 is accepted.
-    This includes the changes discussed in `Proposal For Improvements section of tstn-017 <https://tstn-017.lsst.io/#proposal-for-improvements>`_.
-    The procedures in this documents are still under development.
-    The functionality referenced here is not in place nor has it been agreed upon as the proper implementation.
-
-    **For the time being, this document should be considered a proposed implementation.**
-    Upon completion of the LCR, tstn-017 will be deprecated and the applicable content will be moved here such that this becomes both a user and implementation guide.
-
 .. note::
 
     This manual shows users how to change, add, or revert configurations of all CSCs.
-    This document is intended for operators of the Vera Rubin observatory control system.
+    This document is intended for operators of the Vera Rubin observatory control system but also contains information pertinent to developers.
     It consolidates information about how to handle CSC configuration and ancillary data.
+    
     After reading this document users should know what to expect when interacting with system component's configuration, how to select a configuration for a component and, be able to create and load new configurations.
 
 .. _section-introduction:
@@ -36,7 +27,13 @@ The Vera Rubin Observatory control system is highly distributed, containing mult
 In order to achieve reliable operation it is fundamental to guarantee that observers must be able to, at any point, identify what set of configurations a component is using, what sets are available to be loaded, and how to load the configuration they choose.
 During commissioning and engineering runs, users will also be interested in building, validating and verifying new sets of configurations.
 
+.. Important::
+
+    Most CSCs handle configuration in the same manner, however, there are a few exception to the rule, notably the Camera CSCs.
+    These special cases are addressed in `Appendix I: Creating Configurations for non-salObj CSCs`_.
+
 Although the configuration data structures (e.g. schemas) vary considerably between components, the process to update them is standardized.
+Being CSC specific, the schemas exist within the CSC code repository as a `config_schema.py` file, as is seen here for the `ATDome CSC <https://github.com/lsst-ts/ts_ATDome/tree/develop/python/lsst/ts/ATDome>`_.
 In some cases, the configuration may be a simple set of host name and port that the component connects to.
 In other cases, the configuration may require the calculation of complex lookup tables (e.g. M1M3 and M2) or model coefficients (e.g. pointing component).
 These may require on-sky time for acquiring the data, and complex software to analyze and derive the configuration products.
@@ -45,12 +42,53 @@ All of this data needs to be associated with this configuration in a way that is
 In this tech-note we discuss the basic organization of configurations and the operational procedures involved in handling CSC configuration.
 The document begins with the most simple case of bringing a CSC up with a specific configuration, and eventually details how to updating and testing newly defined configurations.
 
-Most CSCs handle configuration in the same manner, however, there are a few exception to the rule, notably the Camera CSCs.
-These special cases are addressed in section-appendix-configuration-non-salObj_.
 
-For more technical details about how CSCs handle configuration, including the definition of configuration related topics published by the CSC, see `tstn-017 <https://tstn-017.lsst.io>`__.
+Configuration Interface Summary
+===============================
 
-Configuration Repositories and Files
+The standard interface for CSCs is defined in :lse:`209` and is the official reference/requirements document.
+This section provides a very brief overview of the key topics related to configuration that are continually mentioned in the sections below.
+
+The standard configuration related interactions with CSCs happens via two main events (``configurationsAvailable`` and ``configurationsApplied``) and a single command (``configurationOverride``).
+When in the STANDBY state, the ``configurationsAvailable`` event is published which a list of non-default (custom) configurations as well as information required to track available configurations (both default and custom) to a specific git commit.
+Under normal operations, site-specific default configurations are automatically loaded.
+However, using the ``configurationOverride`` parameter (explained in detail in the use-cases below), it is possible to specify one of the non-default configurations that is listed in the ``configurationsAvailable`` event.
+Lastly, the ``configurationsApplied`` event is published when the CSC transitions from the STANDBY state to the DISABLED state (which is on the way to the ENABLED state), which contains the information regarding which configuration(s) have been loaded and are in active use by the CSC.
+
+``configurationsAvailable`` Event Description
+-------------------------------------------
+
+The ``configurationsAvailable`` event is a Generic event that is implemented by every CSC.
+It contains the following parameters: 
+
+- ``overrides`` - A list of files that contain configuration parameters that will override the default values.
+- ``version`` - Contains the version information about the local configuration repository or database.
+  For configurations stored in git repositories, the `branch description <branch-description_>`_ is returned.  
+- ``url`` - A URL indicating how the CSC connects to its settings.
+  It will start with "file:" if it is a clone of a git repo, or the standard URL, if a database.
+- ``schemaVersion`` - Indicates the schema version in use (e.g. v3), which is a folder in the configuration repository.
+
+Further information regarding this event is found in the `Discovering Available Override Configurations`_ use-case.
+
+
+``configurationsApplied`` Event Description
+----------------------------------------
+
+The ``configurationApplied`` event is a Generic event that is implemented by every CSC.
+It contains the following parameters: 
+
+- ``configurations`` - A list of configuration files that have been loaded.
+- ``version`` - Contains the version information about the loaded configuration repository (the SHA) or database.
+  For configurations stored in git repositories the `branch description <branch-description_>`_  is used. 
+- ``url`` - A URL indicating where the CSC connected to its settings.
+  It will start with "file:" if it is a clone of a git repo, or the standard URL, if a database.
+- ``schemaVersion`` - Indicates the schema version selected (e.g. v3), which is a folder in the configuration repository.
+- ``otherInfo`` - Contains a list of events used to publish the entire set of configuration parameters loaded by the CSC, and any other pertinent information.
+  The CSC is allowed to publish as many events as necessary to convey the necessary information.
+
+Further details and explanation regarding this event is found in the `Finding and Using a Previously Used Configuration`_ section.
+
+Configuration Files and Repositories
 ====================================
 
 It is important to have the ability to modify configurations without re-deploying components, therefore, configuration files are stored in their own repositories and kept separated from the code.
@@ -70,25 +108,43 @@ Each of these configuration repositories are organized as follows:
     #. Site-specific Configuration: ``_summit.yaml``, ``_ncsa.yaml``, ``_base.yaml`` etc.
         - This **optional** file contains contain site specific configuration parameters such as IP addresses and ports.
           Many CSCs have site specific files.
+          SalObj determines which site-specific file should be loaded automatically by parsing the ``LSST_DDS_PARTITION_PREFIX`` environment variable
           Between this file and the ``_init.yaml`` file, **the configuration must be fully defined**
 
     #. Configuration overrides: ``filename.yaml``
         - These **optional** files, referred to as configuration overrides, are only to be used when the values declared in the previous files require changes.
-          These files are loaded manually by the users as is demonstrated in the section-configuration-interaction_.
+          These files are loaded manually by the users as is demonstrated in the `Selecting an Override Configuration_` section.
 
 - If a value is specified in more than one of these files, the most recently seen value is used.
   This means that values in the site-specific (``_<site>.yaml``) file override values in the initial file (``_init.yaml``).
   Also, values in the override file (``filename.yaml``) override values populated in the ``_init.yaml`` and ``_<site>.yaml`` files.
 
-For more technical details about how CSCs handle configurations, see `tstn-017 <https://tstn-017.lsst.io>`__.
+Configuration Files for Unit Tests
+----------------------------------
+
+Unit or integration tests requiring specific information shall utilize an override file that is specific to the test.
+Unit tests utilize configuration files stored in the ``tests/data/config`` directory, as is done for the `ATDome CSC <https://github.com/lsst-ts/ts_ATDome/tree/develop/tests/data/config>`_.
+See the `Salobj documentation <https://ts-salobj.lsst.io>`__ for more details.
+
+.. _section-continuous-monitoring:
+
+Monitoring of the Configuration Repository
+------------------------------------------
+
+CSCs are required (as per :lse:`209`) to publish ``configurationsAvailable``  event when they transition to ``STANDBY`` state.
+However, while in ``STANDBY`` state it is possible for someone to update the available configuration, which would make the information out of sync.
+Therefore, while in ``STANDBY`` state, CSCs continuously monitor the configuration repository and update/publish new topics whenever changes are detected.
+
+This monitoring only happens while the CSC is in ``STANDBY`` and should not interfere with any other state.
+For instance, when transitioning from ``DISABLE`` to ``STANDBY``, the CSC will not start monitoring until the transition is completed and the command acknowledged.
 
 
 .. _Master CSC Table: https://ts-xml.lsst.io/#master-csc-table.
 
 .. _section-configuration-interaction:
 
-Configuration Interaction Use-Cases
-===================================
+Starting CSCs with Existing Configurations
+==========================================
 
 Users will interact with configurations in multiple ways.
 In many cases, a user/operator will only need to change the configuration that is currently loaded and are not concerned with the contents of the configuration itself.
@@ -99,7 +155,7 @@ Selecting the Default Configuration
 -----------------------------------
 
 In the high majority of cases, users will want to load the default configuration.
-The default configuration consists of parameters in the `_init.yaml` file and subsequently the `_<site>.yaml`, if it is present.
+The default configuration consists of parameters in the ``_init.yaml`` file and subsequently the ``_<site>.yaml``, if it is present.
 These files are loaded automatically when performing state transitions using salobj or any higher-level software.
 
 In most cases, the control packages contain high-level commands to enable all components under their control.
@@ -178,6 +234,8 @@ If these types of tasks are performed from the LOVE interface, then the same res
 Discovering Available Override Configurations
 ---------------------------------------------
 
+It is also possible to override the defaults using one of the available overrides.
+However, first one must determine which overrides are available to the CSC.
 The easiest way to get information from a CSC programmatically is by using a Jupyter notebook server.
 From a notebook, observers, developers and power users can easily interact with the system through Python.
 
@@ -266,6 +324,10 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
     # Wait for script to execute
     await script.done()
 
+.. note::
+    
+    Providing the ``_init.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter will return an error.
+
 .. And from the LOVE interface:
 
 Examples of how to do this using the LOVE interface will be added soon.
@@ -308,8 +370,6 @@ If working with an individual CSC, which should be a special case, the ``salobj.
 
 .. TODO: Add example on how to launch script from LOVE interface
 
-.. _section-configuration-creating-a-new:
-
 Modifying or Creating a New Configuration
 =========================================
 
@@ -350,12 +410,12 @@ For other components, see the exception section below.
 
 #.  Edit/Add/Replace the configuration file(s) in the CSC's configuration directory.
 
-        - If editing the ``_init.yaml`` or a ``_<site>.yaml`` file, the filename must remain unchanged.
-        - If editing or adding an configuration override file, ideally the name of the file should reflect the purpose of change; dates can also be used as well.
-          Old configuration files can be kept in the repo if they still represent valid configurations. Otherwise, they should be removed.
-          Note, though, that they will still remain available on previous commits in the git repo, enabling historical comparison.
+    - If editing the ``_init.yaml`` or a ``_<site>.yaml`` file, the filename must remain unchanged.
+    - If editing or adding an configuration override file, ideally the name of the file should reflect the purpose of change; dates can also be used as well. 
+      Old configuration files can be kept in the repo if they still represent valid configurations. Otherwise, they should be removed.
+      Note, though, that they will still remain available on previous commits in the git repo, enabling historical comparison.
 
-#.  Fill out the required metadata at the top of the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration, such as in `this example <https://tstn-017.lsst.io/v/PREOPS-27/_downloads/ATSpectrograph_example_config.yaml>`__.
+#.  Fill out the required metadata at the top of the file detailing where any auxiliary data may be stored, the Jira ticket number used to create the file, and the reason for creating the configuration, such as in :download:`this example <_static/ATSpectrograph_example_config.yaml>`.
 
 #.  If you have an environment to do so, such as the standard T&S development container, run the unit tests in the package locally.
 
@@ -371,7 +431,7 @@ For other components, see the exception section below.
 #.  Test the new configuration on the CSC.
     If this requires in-dome or on-sky testing, then create an annotated alpha release tag.
     Then make sure the test is properly documented in a technote and/or Jira ticket.
-    To make the configuration available on a running CSC check :ref:`section-on-the-fly-config`.
+    To make the configuration available on a running CSC check `On-the-Fly Configuration Changes`_.
 
 #.  Create pull request(s) (PRs) to have the files reviewed
 
@@ -381,78 +441,18 @@ For other components, see the exception section below.
     The new configuration then becomes official and will be deployed as part of the standard deployment process.
 
 
-Exceptions
-----------
-TBR.
-
-..
-    TODO: Complete this section - Is this section meant to document procedures for non-Salobj CSCs?
-
-.. _section-configuration-interaction-traceability:
-
-Finding and Using a Previously Used Configuration
--------------------------------------------------
-
-In the future, one may want to verify which configuration was being used for a given observation and possibly load the exact same configuration.
-Because we often use generic filenames (e.g. `simple_algorithm.yaml`), and file contents can change with time, creating a robust version controlled system must go beyond simply changing filenames.
-For this reason, additional metadata is associated with each configuration, notably the ``url`` and ``version`` parameters in both the ``configurationsAvailable`` and ``configurationApplied`` events.
-These parameters are key to ensuring that each configuration is unique, and is traceable to their filename and contents.
-
-The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repository).
-The ``version`` parameter is more complicated.
-For all CSCs (except possibly the cameras), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
-This is what is output by running the following command in a configuration repository (e.g. ``ts_config_latiss``):
-
-.. prompt:: bash
-
-    git describe --all --long --always --dirty --broken
-
-.. [#git_version] The option ``--broken`` was introduced in git 2.13.7
-
-An example output is, ``heads/develop-0-gc89ef1a``.
-The repository branch (or tag) name forms the first part of the branch description.
-This first part contain individual identifiers and can change rapidly.
-It may take any form necessary to convey the appropriate information.
-The last 7 characters (``c89ef1a``) is the hash of the commit of repository, so all configuration files in that repo correspond to the same hash.
-Users can find this commit by navigating to the repository on github, searching for the commit hash, then
-clicking on the "commits" section of the search results, as shown in :ref:`the screenshot below <fig-commit-tracing>`.
-
-.. figure:: /_static/tracing_a_commit_on_github.jpg
-    :name: fig-commit-tracing
-
-    Using the ``version`` output in the ``configurationApplied`` event, it is possible to traceback the repo to the configuration that was loaded.
-
-Once we have identified the hash of the commit file we want to reload, we can do that without having to make any changes to the currently deployed ts_config package.
-If we simply want to use the default site-specific configuration for a given CSC, we can specify the commit hash with a preceding colon (``:``) as follows:
-
-.. code-block:: python
-
-    from lsst.ts.observatory.control import ATCS
-
-    atcs = ATCS()
-
-    await atcs.start_task
-
-    # ATAOS must be in STANDBY state for this to work. All other CSCs will
-    # use their default configurations
-    await atcs.enable(configurationOverride={'ATAOS': ':c89ef1a'})
-
-If we also want to specify an override file then we insert the filename before the colon (``:``) as shown below:
-
-.. code-block:: python
-
-    await atcs.enable(configurationOverride={'ATAOS': 'simple_algorithm.yaml:c89ef1a'})
-.. _section-on-the-fly-config:
 
 On-the-Fly Configuration Changes
---------------------------------
+================================
 
-During the process of creating a new configuration (:ref:`section-configuration-creating-a-new`) or during a commissioning/engineering run, it may be necessary to make a new configuration available to a running CSC for testing without rebuilding/re-deploying the component.
-In these cases, the user should also create a Jira ticket (or work out of an existing ticket) to document the occurrence.
+During the process of creating a new configuration (see also `Modifying or Creating a New Configuration`_) or during a commissioning/engineering run, it may be necessary to make a new configuration available to a running CSC. 
+Normally, new configurations are only made available when rebuilding/re-deploying the component and associated configuration repository, but this is not always a feasible solution.
+Therefore, in cases where on-the-fly configuration changes are required, this procedure should be followed.
+Like the other procedures, the user should create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 
 Following are the steps to make a new configuration available to a running CSC:
 
-#.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 8 in :ref:`section-configuration-creating-a-new`.
+#.  If the configuration is not already created and pushed to GitHub, follow steps 1 to 8 in `Modifying or Creating a New Configuration`_.
 #.  Create an annotated tag alpha tag following `semantic versioning`_.
     The tag must be created to ensure the heritage is not lost in a forced commit to the branch
 
@@ -470,7 +470,7 @@ Following are the steps to make a new configuration available to a running CSC:
     The procedure will vary depending on how the CSC is deployed.
     Most Telescope and Site components are deployed on containers using Kubernetes (k8s).
     For CSCs that are not running on a container, you should be able to login to the host machine with ``ssh`` and continue with the procedure (go to step 3).
-    A provisional list of IPs can be found in `confluence <https://confluence.lsstcorp.org/x/qw6SBg>`.
+    A provisional list of IPs can be found in `confluence <https://confluence.lsstcorp.org/x/qw6SBg>`_.
     For details about the deployment system see the `deployment documentation <https://tstn-019.lsst.io>`_.
 
     The procedure to access containerized components is as follows:
@@ -578,11 +578,11 @@ Note that it would be possible to track the configuration in the future by using
 
 .. _section-in-line-config:
 
-In-line changes
----------------
+In-line Changes to Loaded Configurations
+----------------------------------------
 
 During commissioning, we anticipate that there will be situations where quick configuration changes need to be implemented and tested.
-In these cases, working out of a local branch and going over the :ref:`section-on-the-fly-config` process may result in the loss of on-sky time.
+In these cases, working out of a local branch and going over the `On-the-Fly Configuration Changes`_ process may result in the loss of on-sky time.
 To ensure the work/changes is tracked it is still recommended that the user create a Jira ticket (or work out of an existing ticket) to document the occurrence.
 Then, instead of checking out the repository locally, the user can work out of the deployed CSC configuration directly in the host.
 
@@ -629,7 +629,67 @@ When you connect to the computer running a CSC and edit the configuration direct
   version: heads/tickets/DM-12345-0-g79e2257-dirty
 
 When this happens, it prevents us from precisely identifying what configuration was used.
-In this case, the preferred solution is to use :ref:`section-on-the-fly-config` to ensure traceability is not lost, at the expense of a couple extra minutes.
+In this case, the preferred solution is to follow the `On-the-Fly Configuration Changes`_ process to ensure traceability is not lost, at the expense of a couple extra minutes.
+
+.. _section-configuration-interaction-traceability:
+
+Finding and Using a Previously Used Configuration
+=================================================
+
+In the future, one may want to verify which configuration was being used for a given observation and possibly load the exact same configuration.
+Because we often use generic filenames (e.g. `simple_algorithm.yaml`), and file contents can change with time, creating a robust version controlled system must go beyond simply changing filenames.
+For this reason, additional metadata is associated with each configuration, notably the ``url`` and ``version`` parameters in both the ``configurationsAvailable`` and ``configurationApplied`` events.
+These parameters are key to ensuring that each configuration is unique, and is traceable to their filename and contents.
+
+The ``url`` parameter simply contains a URL indicating how the CSC connects to its settings (meaning a link to the repository).
+
+.. _branch-description:
+
+The ``version`` parameter is more complicated.
+For all CSCs (except possibly the cameras), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
+It can be obtained by running the following git command on the command line.
+
+.. prompt:: bash
+
+    git describe --all --long --always --dirty --broken
+
+.. [#git_version] The option ``--broken`` was introduced in git 2.13.7
+
+
+When running the command in a configuration repository (e.g. ``ts_config_latiss``) the output is, ``heads/develop-0-gc89ef1a``.
+The repository branch (or tag) name forms the first part of the branch description.
+This first part contain individual identifiers and can change rapidly.
+It may take any form necessary to convey the appropriate information.
+The last 7 characters (``c89ef1a``) is the hash of the commit of repository, so all configuration files in that repo correspond to the same hash.
+Users can find this commit by navigating to the repository on github, searching for the commit hash, then
+clicking on the "commits" section of the search results, as shown in :ref:`the screenshot below <fig-commit-tracing>`.
+
+.. figure:: /_static/tracing_a_commit_on_github.jpg
+    :name: fig-commit-tracing
+
+    Using the ``version`` output in the ``configurationApplied`` event, it is possible to traceback the repo to the configuration that was loaded.
+
+Once we have identified the hash of the commit file we want to reload, we can do that without having to make any changes to the currently deployed ts_config package.
+If we simply want to use the default site-specific configuration for a given CSC, we can specify the commit hash with a preceding colon (``:``) as follows:
+
+.. code-block:: python
+
+    from lsst.ts.observatory.control import ATCS
+
+    atcs = ATCS()
+
+    await atcs.start_task
+
+    # ATAOS must be in STANDBY state for this to work. All other CSCs will
+    # use their default configurations
+    await atcs.enable(configurationOverride={'ATAOS': ':c89ef1a'})
+
+If we also want to specify an override file then we insert the filename before the colon (``:``) as shown below:
+
+.. code-block:: python
+
+    await atcs.enable(configurationOverride={'ATAOS': 'simple_algorithm.yaml:c89ef1a'})
+
 
 Exceptions
 ----------
@@ -638,12 +698,92 @@ The following require different procedures to create/modify a configuration
 
 - :ref:`Main and Auxiliary Telescope Pointing Components <section-pointing-component>`
 - :ref:`ATMCS and ATPneumatics <section-atmcs-atpneumatics>`
+- Camera CSCs
+
+CSC Developer information
+=========================
+
+This section contains information that is primarily of interest to CSC developers.
+However, if issues are being encountered when creating new configurations the information may be pertinent.
+
+Rules Regarding Configuration Definitions and Usage
+---------------------------------------------------
+#.  No default values shall be contained in the configuration schema definition in the CSC repository.
+
+#.  In the configuration repository for the given CSC (e.g `ts_config_attcs <https://github.com/lsst-ts/ts_config_attcs>`_ for the ATDome) there shall be a ``_init.yaml`` file that specifies values that are expected to be common to all sites and/or be relatively static in operations (we intentionally use "_init" instead of "_default").
+
+    - See this :download:`example _init.yaml <_static/_init.yaml>` for the ATSpectrograph CSC.
+    - This file is the first configuration file loaded by the CSC
+    - Providing the ``_init.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter will return an error
+    - Note that all CSCs having multiple algorithms [2]_, each with different required configuration parameters, must have an initial set of defaults in this file.
+
+#.  Also in the configuration repository for the given CSC, when applicable, are the files corresponding to each site where the CSC is used (e.g. ``_summit.yaml, _ncsa.yaml, _base.yaml``).
+    These files contain site-specific configuration parameters such as IP addresses and ports.
+    However, if no site-specific parameters exist for the CSC, then the use of this file is not required.
+    Items in the ``_<site>.yaml`` file will override values that may have been declared in the ``_init.yaml`` file
+    SalObj determines which site-specific file should be loaded automatically by parsing the ``LSST_DDS_PARTITION_PREFIX`` environment variable
+
+    - See this :download:`example _summit.yaml <_static/_summit.yaml>` for the ATSpectrograph CSC.
+    - This file is the second configuration file to get loaded by the CSC and will override any previously declared values.
+    - Providing the ``_<site>.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter will return an error
+    - The combination of the ``_<site>.yaml`` and ``_init.yaml`` files **must fully populate all configuration parameters**.
+
+#.  The override configuration files, if specified using the `configurationOverride` parameter in the start command, will override for the configuration parameters set by the previous files.
+
+    - See this :download:`configuration parameter override example file <_static/ATSpectrograph_example_config.yaml>` for the ATSpectrograph CSC.
+    - This file is the third configuration file to get loaded by the CSC and will override any previously declared values.
+    - These files are not expected to be required as part of regular operations and are meant to be used when a non-standard configuration is required
+    - If an override configuration file is also site-specific, then a prefix should be added indicating which site it belongs with (e.g. ``summit_reduced_stage_travel.yaml``)
+
+#.  No file shall exist having the name ``default.yaml``.
+    There are other invalid names for files (e.g. ``init.yaml``) which are to be verified by continuous integration tests in the configuration repository.
+
+#.  If a CSC receives a ``start`` command with an empty ``configurationOverride`` parameter, it will load the values in ``_init.yaml`` then the site-specific file (e.g. ``_summit.yaml``).
+
+#.  If a CSC receives a ``start`` command with a ``configurationOverride`` parameter equal to a valid filename, it loads the values in ``_init.yaml``, then the site-specific file (e.g. ``_summit.yaml``) if it exists, and lastly the override file.
+    An invalid filename will return as a failed command with an appropriate error message saying the file was not readable and no state transition will occur.
+
+#.  The configuration repository shall not contain configurations used for unit testing.
+    Configurations needed for unit testing shall be added to the ``test`` directory in the CSC repository and use the override feature in CSCs (see `Salobj documentation <https://ts-salobj.lsst.io>`__).
+
+#.  All configuration files shall have a header metadata fields explaining that they are loading basic values from ``_init.yaml``, as shown in the :download:`example configuration file <_static/ATSpectrograph_example_config.yaml>` mentioned above.
 
 
-.. _section-appendix-configuration-non-salObj:
+.. [2] A schema must be constant; it cannot change as a result of setting configuration values.
+       A variable schema makes it impossible to specify a full set of default values in the _init.yaml and _<site>.yaml files.
+       Consider ATDomeTrajectory: it supports selecting a following algorithm, and each algorithm can have different configuration parameters.
+       In order to keep the schema constant, the schema includes configuration parameters for all following algorithms, rather than changing the schema based on which following algorithm is selected.
+
+
+
+Required Unit and Continuous Integration (CI) Testing
+-----------------------------------------------------
+
+Due to the dependence of the configuration files on the defined schema, which are located in different repositories, CI tests are required to ensure there is no breakage when making modifications in either repository.
+The verification of a configuration requires that the files are syntactically correct and that all fields are populated with correctly formatted values.
+This verification is what is performed in the following tests.
+The validation of a configuration requires that the input values are indeed the correct values required by the user.
+Validation is out of scope for CI tests.
+
+The following CI tests are required on all configuration repos (e.g. ``ts_config_attcs``):
+
+    #. Verify that if site-specific configuration files exist, then they exist for all sites, and the site names are valid
+    #. Verify that ``_init.yaml`` + ``_<site>.yaml`` results in a complete configuration.
+       This is performed for each site-specific file.
+    #. Verify that ``_init.yaml`` + ``_<site>.yaml`` + ``<override>.yaml`` is valid for all combinations of site and override files.
+    #. Verify that new and/or updated configurations have updated metadata
+    #. Verify that "default" is never used as a filename
+
+The following CI tests are required on all configurable CSC repos (e.g. ``ts_ATDome``):
+
+    #. Verify that no defaults are set in the schema.
+    #. Verify that all configuration files in the configuration repository (e.g. ``ts_config_attcs``) are verified against the current schema.
+
+
+
 
 Appendix I: Creating Configurations for non-salObj CSCs
-=========================================================
+=======================================================
 
 This appendix details the require procedures to produce configuration files for specific CSCs that do not follow the procedure in this document.
 
@@ -667,6 +807,10 @@ The CSC is being developed by Observatory Sciences using C++.
 ATMCS and ATPneumatics
 ----------------------
 
+The ATMCS and ATPneumatics are both being developed in LabVIEW under a subcontract with CTIO.
+Both CSCs contain a couple of ``.ini`` configuration files that are stored with the main code base.
+Neither CSC accepts a ``configurationOverride`` value to switch between different configurations, nor outputs the configuration specific events.
+
 .. Important::
 
     PROCEDURE TO BE ADDED
@@ -683,14 +827,60 @@ Non-configurable CSCs will have no data in the configuration column of the `Mast
 A non-configurable CSC will ignore the ``configurationOverride`` parameter of the ``start`` command, as it has no meaning.
 Likewise these CSCs will not output any of the configuration-related events.
 
+Appendix II: System Requirements
+================================
 
-.. rubric:: References
+These are the collection of requirement documents and the requirements that drives the discussion of this tech-note.
 
-.. bibliography:: local.bib lsstbib/books.bib lsstbib/lsst.bib lsstbib/lsst-dm.bib lsstbib/refs.bib lsstbib/refs_ads.bib
-    :style: lsst_aa
+.. _section-lse-60:
 
-.. Add content here.
-.. Do not include the document title (it's automatically added from metadata.yaml).
+LSE-60
+------
+
+Requirement TLS-REQ-0065, in section 2.8.1.3 from the Telescope & Site Subsystem Requirements :lse:`60` states that:
+
+    The Telescope and Site shall publish telemetry using the Observatory specified protocol (Document-2233) containing time stamped structures of all command-response pairs and all technical data streams including hardware health, and status information.
+    The telemetry shall include all required information (metadata) needed for the scientific analysis of the survey data as well as, at a minimum, the following:
+    Changes in the internal state of the system, Health and status of operating systems, and Temperature, rate, pressure, loads, status, and conditions at all sensed system components.
+
+This is a broad requirement specifying that components must publish operational status information.
+
+.. _section-lse-62:
+
+LSE-62
+------
+
+The LSST Observatory Control System Requirements Document :lse:`62` contains three requirements regarding system configuration:
+
+Requirement OCS-REQ-0045 in section 3.4.4 (Subsystem Latest Configuration) states that:
+
+        Specification: The Configuration Database shall manage the latest configuration for each subsystem, for the different observing modes.
+
+        Discussion: The Configuration Database maintains also the latest configuration utilized during operations that can be utilized for rapid restoration of service in case of failure.
+
+Requirement OCS-REQ-0069 in section 3.4.4.1 (Subsystem Parameters) state that:
+
+    Specification: The Configuration Database shall manage the subsystem parameters for the different observing modes.
+
+Requirement OCS-REQ-0070 in section 3.4.4.2 (Subsystem History) state that:
+
+    Specification: The Configuration Database shall manage subsystem history for the different observing modes.
+
+See furthermore details about the adopted definition of "configuration database" in the context of the control software architecture and more details about the proposed implementation.
+
+.. _section-lse-150:
+
+LSE-150
+-------
+
+Section 2.4 of the LSST Control Software Architecture :lse:`150` describes how to perform configuration management.
+The document provides two valid alternatives for managing configuration in the LSST system; through a configuration database or version control system.
+
+For a configuration database, any solution is acceptable as long as the technology allows versioning of the database.
+
+For version control systems the adopted solution is `git <https://git-scm.com>`__.
+The document also specifies that configurations must be stored in a separate repository from that of the component source code, to allow the configuration to evolve independently of the main code base.
+The configuration for different components can be stored individually or in groups of components to facilitate maintainance.
 
 .. .. rubric:: References
 

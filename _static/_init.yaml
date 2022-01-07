@@ -1,0 +1,76 @@
+# This is the base (and therefore default) configuration to be used by the ATSpectrograph.
+# See tstn-020.lsst.io for a description of how to interact with CSC configurations.
+# The first section of this configuration file contains metadata fields specific to this file.
+# The fields are used for heritage tracking and knowledge transfer only.
+metadata:
+   ticket: DM-24808
+   date_created: 2020-05-24
+   version: v3
+   modifications : Extended maximum linear stage position to support the full range
+   description: >-
+      Contains parameters for ATSpectrograph that are not expected to be modified regularily.
+      Description of each property is found with the schema located in the ts_atspec CSC repository.
+
+# Below are defaults for configurable parameters
+host: 127.0.0.1
+port: 9999
+connection_timeout: 60.
+response_timeout: 30.
+move_timeout: 30.
+min_pos: 0.
+max_pos: 74
+tolerance: 0.01
+filters:
+   filter_name:
+      - empty_1
+      - empty_2
+      - BG40
+      - RG610
+   filter_central_wavelength:
+      - 700
+      - 700
+      - 450
+      - 840
+   band:
+      - Empty
+      - Empty
+      - Empty
+      - Empty
+   filter_focus_offset:
+      - 0.00
+      - 0.00
+      - -0.019
+      - -0.000
+  offset_pointing_filter:
+    x:
+      - 0.
+      - 0.
+      - 0.
+      - 0.
+    y:
+      - 0.
+      - 0.
+      - 0.
+      - 0.
+gratings:
+   grating_name:
+      - empty_1
+      - ronchi90lpmm
+      - ronchi90lpmm
+      - empty_4
+   grating_focus_offset:
+      - 0.0
+      - -0.026
+      - 0.0
+      - 0.0
+   offset_pointing_grating:
+      x:
+         - 0.
+         - -10.
+         - -12.
+         - 0.
+      y:
+         - 0.
+         - 2.
+         - 3.
+         - 0.
