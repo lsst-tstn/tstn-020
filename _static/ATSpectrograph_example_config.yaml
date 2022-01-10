@@ -1,11 +1,9 @@
-# This is a configuration override file for values container in _init.yaml or _<site>.yaml,
-# See tstn-020.lsst.io for a description of how to interact with CSC configurations.
+# This is a configuration override file for values contained in _init.yaml or _<site>.yaml,
 # The first section of this configuration file contains metadata fields specific to this file
 # the fields are used for heritage tracking and knowledge transfer only.
 metadata:
    ticket: DM-24808
    date_created: 2020-05-24
-   version: v3
    description: >-
       Explain what this file is used for and why it exists.
 
