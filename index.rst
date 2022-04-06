@@ -49,11 +49,11 @@ Configuration Interface Summary
 The standard interface for CSCs is defined in :lse:`209` and is the official reference/requirements document.
 This section provides a very brief overview of the key topics related to configuration that are described in further detail in the sections below.
 
-Configuration-related interactions with CSCs happens via two main events (``configurationsAvailable`` and ``configurationsApplied``) and a single parameter as part of the ``start`` command (``configurationOverride``).
+Configuration-related interactions with CSCs happens via two main events (``configurationsAvailable`` and ``configurationApplied``) and a single parameter as part of the ``start`` command (``configurationOverride``).
 When in the STANDBY state, the ``configurationsAvailable`` event is published which includes a list of non-default (custom) configurations as well as information required to track available configurations (both default and custom) to a specific git commit.
 Under normal operations, site-specific default configurations are automatically loaded.
 However, using the ``configurationOverride`` parameter (explained in detail in `Selecting an Override Configuration_` section), it is possible to specify one of the non-default configurations that is listed in the ``configurationsAvailable`` event.
-Lastly, the ``configurationsApplied`` event is published when the CSC transitions from the STANDBY state to the DISABLED state (which is on the way to the ENABLED state).
+Lastly, the ``configurationApplied`` event is published when the CSC transitions from the STANDBY state to the DISABLED state (which is on the way to the ENABLED state).
 The event contains the information regarding which configuration(s) have been loaded and are in active use by the CSC.
 
 ``configurationsAvailable`` Event Description
@@ -72,8 +72,8 @@ It contains the following parameters:
 Further information regarding this event is found in the `Discovering Available Override Configurations`_ use-case.
 
 
-``configurationsApplied`` Event Description
--------------------------------------------
+``configurationApplied`` Event Description
+------------------------------------------
 
 The ``configurationApplied`` event is a Generic event that is implemented by every configurable CSC.
 It contains the following parameters: 
@@ -301,6 +301,7 @@ For example, if the look-up tables in the default configuration for the ATAOS ar
 
 When enabling components using the ATCS class, a dictionary is used to provide the appropriate configuration override files for each component that needs a non-default configuration.
 This example assumes the component of interest is already in the ``STANDBY`` state.
+Note that the specified override filenames are for example purposes only and are not official overrides.
 
 .. code-block:: python
 
@@ -568,7 +569,7 @@ Therefore, in cases where on-the-fly configuration changes are required, the fol
 
     .. code-block:: python
 
-        await salobj.set_summary_state(ataos, salobj.State.ENABLED, override='summit_constant_hex')
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED, override='summit_constant_hex.yaml')
 
 
 The ``version`` attribute in the ``configurationsAvailable`` event would reflect that change with something like:
@@ -653,6 +654,7 @@ The ``url`` parameter contains a URL indicating how the CSC connects to its conf
 The ``version`` parameter is a bit more complicated.
 For all CSCs (except possibly the cameras), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
 It can be obtained by running the following git command on the command line.
+The following example and output was derived using a real world example, however, the files are no longer in place and therefore will not yield the same results.
 
 .. prompt:: bash
 
@@ -732,7 +734,7 @@ Rules Regarding Configuration Definitions and Usage
     - Providing the ``_<site>.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter in the ``start`` command must result in rejecting the command.
     - The combination of the ``_<site>.yaml`` and ``_init.yaml`` files **must fully populate all configuration parameters**.
 
-#.  The override configuration files, if specified using the `configurationOverride` parameter in the ``start`` command, is the third file loaded and will override the values set by the previously configuration files.
+#.  The override configuration files, if specified using the ``configurationOverride`` parameter in the ``start`` command, is the third file loaded and will override the values set by the previously configuration files.
 
     - These files are not expected to be required as part of regular operations and are meant to be used when a non-standard configuration is required.
     - See this :download:`configuration parameter override example file <_static/ATSpectrograph_example_config.yaml>` for the ATSpectrograph CSC.d
