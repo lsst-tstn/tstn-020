@@ -49,11 +49,11 @@ Configuration Interface Summary
 The standard interface for CSCs is defined in :lse:`209` and is the official reference/requirements document.
 This section provides a very brief overview of the key topics related to configuration that are described in further detail in the sections below.
 
-Configuration-related interactions with CSCs happens via two main events (``configurationsAvailable`` and ``configurationsApplied``) and a single parameter as part of the start command (``configurationOverride``).
+Configuration-related interactions with CSCs happens via two main events (``configurationsAvailable`` and ``configurationApplied``) and a single parameter as part of the ``start`` command (``configurationOverride``).
 When in the STANDBY state, the ``configurationsAvailable`` event is published which includes a list of non-default (custom) configurations as well as information required to track available configurations (both default and custom) to a specific git commit.
 Under normal operations, site-specific default configurations are automatically loaded.
 However, using the ``configurationOverride`` parameter (explained in detail in `Selecting an Override Configuration_` section), it is possible to specify one of the non-default configurations that is listed in the ``configurationsAvailable`` event.
-Lastly, the ``configurationsApplied`` event is published when the CSC transitions from the STANDBY state to the DISABLED state (which is on the way to the ENABLED state).
+Lastly, the ``configurationApplied`` event is published when the CSC transitions from the STANDBY state to the DISABLED state (which is on the way to the ENABLED state).
 The event contains the information regarding which configuration(s) have been loaded and are in active use by the CSC.
 
 ``configurationsAvailable`` Event Description
@@ -72,8 +72,8 @@ It contains the following parameters:
 Further information regarding this event is found in the `Discovering Available Override Configurations`_ use-case.
 
 
-``configurationsApplied`` Event Description
--------------------------------------------
+``configurationApplied`` Event Description
+------------------------------------------
 
 The ``configurationApplied`` event is a Generic event that is implemented by every configurable CSC.
 It contains the following parameters: 
@@ -151,6 +151,12 @@ Users will interact with configurations in multiple ways.
 In many cases, a user/operator will only need to change the configuration that is currently loaded and are not concerned with the contents of the configuration itself.
 In other cases, the user/operator will need to make a change to file, then immediately reload it.
 This section illustrates example use-cases for these types of scenarios.
+
+.. note:: 
+
+    When interacting with CSCs from high-level classes, the standard (PEP8) style guide is adopted.
+    This results in command parameters using ``snake_case`` whereas the parameters of CSC commands at the state-machine level use ``camelCase`` to match the XML which is designed to be compliant with DDS naming restrictions.
+
 
 Selecting the Default Configuration
 -----------------------------------
@@ -295,6 +301,7 @@ For example, if the look-up tables in the default configuration for the ATAOS ar
 
 When enabling components using the ATCS class, a dictionary is used to provide the appropriate configuration override files for each component that needs a non-default configuration.
 This example assumes the component of interest is already in the ``STANDBY`` state.
+Note that the specified override filenames are for example purposes only and are not official overrides.
 
 .. code-block:: python
 
@@ -306,7 +313,7 @@ This example assumes the component of interest is already in the ``STANDBY`` sta
 
     # ATAOS must be in STANDBY state for this to work. All other CSCs will
     # use their default configurations
-    await atcs.enable(configurationOverride={'ATAOS': 'summit_constant_hex.yaml'})
+    await atcs.enable(override={'ATAOS': 'summit_constant_hex.yaml'})
 
 .. From a Jupyter notebook, users can also launch a script by doing the following:
 
@@ -348,7 +355,7 @@ If working with an individual CSC, which should be a special case, the ``salobj.
     await atdome.start_task()
 
     await salobj.set_summary_state(
-    atdome, salobj.State.ENABLED, configurationOverride="simple_algorithm.yaml"
+    atdome, salobj.State.ENABLED, override="simple_algorithm.yaml"
     )
 
 .. And to launch a ``Script`` from Jupyter:
@@ -558,11 +565,11 @@ Therefore, in cases where on-the-fly configuration changes are required, the fol
 
         await salobj.set_summary_state(ataos, salobj.State.ENABLED)
 
-    If an override configuration was modified/added, then you must specify it using the ``configurationOverride`` keyword
+    If an override configuration was modified/added, then you must specify it using the ``override`` keyword
 
     .. code-block:: python
 
-        await salobj.set_summary_state(ataos, salobj.State.ENABLED, configurationOverride='summit_constant_hex')
+        await salobj.set_summary_state(ataos, salobj.State.ENABLED, override='summit_constant_hex.yaml')
 
 
 The ``version`` attribute in the ``configurationsAvailable`` event would reflect that change with something like:
@@ -647,6 +654,7 @@ The ``url`` parameter contains a URL indicating how the CSC connects to its conf
 The ``version`` parameter is a bit more complicated.
 For all CSCs (except possibly the cameras), the ``version`` parameter is a *branch description*\ [#git_version]_ which is automatically generated and populated by the CSCs.
 It can be obtained by running the following git command on the command line.
+The following example and output was derived using a real world example, however, the files are no longer in place and therefore will not yield the same results.
 
 .. prompt:: bash
 
@@ -693,7 +701,7 @@ If we also want to specify an override file then we insert the filename before t
 Exceptions
 ----------
 
-The following require different procedures to create/modify a configuration
+The following require different procedures to create/modify a configuration:
 
 - :ref:`Main and Auxiliary Telescope Pointing Components <section-pointing-component>`
 - :ref:`ATMCS and ATPneumatics <section-atmcs-atpneumatics>`
@@ -713,7 +721,7 @@ Rules Regarding Configuration Definitions and Usage
 
     - See this :download:`example _init.yaml <_static/_init.yaml>` for the ATSpectrograph CSC.
     - This file is the first configuration file loaded by the CSC.
-    - Providing the ``_init.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter will return an error.
+    - Providing the ``_init.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter in the ``start`` command (or ``override`` in the ``set_summary_state`` command) will return an error.
 
 #.  Also in the configuration repository for the given CSC, when applicable, are the files corresponding to each site where the CSC is used (e.g. ``_summit.yaml, _ncsa.yaml, _base.yaml``).
     These files contain site-specific configuration parameters such as IP addresses and ports.
@@ -723,10 +731,10 @@ Rules Regarding Configuration Definitions and Usage
 
     - See this :download:`example _summit.yaml <_static/_summit.yaml>` for the ATSpectrograph CSC.
     - This file is the second configuration file to get loaded by the CSC and will override any previously declared values.
-    - Providing the ``_<site>.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter must result in rejecting the command.
+    - Providing the ``_<site>.yaml`` file (or any file with a ``_`` prefix) to the ``configurationOverride`` parameter in the ``start`` command must result in rejecting the command.
     - The combination of the ``_<site>.yaml`` and ``_init.yaml`` files **must fully populate all configuration parameters**.
 
-#.  The override configuration files, if specified using the `configurationOverride` parameter in the start command, is the third file loaded and will override the values set by the previously configuration files.
+#.  The override configuration files, if specified using the ``configurationOverride`` parameter in the ``start`` command, is the third file loaded and will override the values set by the previously configuration files.
 
     - These files are not expected to be required as part of regular operations and are meant to be used when a non-standard configuration is required.
     - See this :download:`configuration parameter override example file <_static/ATSpectrograph_example_config.yaml>` for the ATSpectrograph CSC.d
@@ -744,8 +752,6 @@ Rules Regarding Configuration Definitions and Usage
     Configurations needed for unit testing shall be added to the ``test`` directory in the CSC repository and use the override feature in CSCs (see `Salobj documentation <https://ts-salobj.lsst.io>`__).
 
 #.  All configuration files shall have header metadata fields explaining that they are loading basic values from ``_init.yaml``, as shown in the :download:`example configuration file <_static/ATSpectrograph_example_config.yaml>` mentioned above.
-
-
 
 
 Required Unit and Continuous Integration (CI) Testing
@@ -771,8 +777,6 @@ The following CI tests are required on all configurable CSC repos (e.g. ``ts_ATD
 
     #. Verify that no defaults are set in the schema.
     #. Verify that all configuration files in the configuration repository (e.g. ``ts_config_attcs``) match the current schema.
-
-
 
 
 Appendix I: Creating Configurations for non-salObj CSCs
@@ -801,12 +805,8 @@ ATMCS and ATPneumatics
 ----------------------
 
 The ATMCS and ATPneumatics are both being developed in LabVIEW under a subcontract with CTIO.
-Both CSCs contain a couple of ``.ini`` configuration files that are stored with the main code base.
+Both CSCs contain a couple of low-level ``.ini`` configuration files that are stored with the main code base, but the CSCs are not classified as configurable CSCs.
 Neither CSC accepts a ``configurationOverride`` value to switch between different configurations, nor outputs the configuration specific events.
-
-.. Important::
-
-    PROCEDURE TO BE ADDED/LINKED
 
 .. _section-non-configurable-cscs:
 
